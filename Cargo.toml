@@ -7,17 +7,21 @@ edition = "2021"
 
 [dependencies]
 js-sys = "0.3.64"
-leptos = { path = "../leptos/leptos", features = ["csr"] }
+leptos = { path = "../leptos/leptos", features = ["csr", "nightly"] }
 gpf = { path = "../gpf" }
 tobj = { version = "4.0.0", features = ["use_f64"], default-features = false }
 wasm-bindgen = "0.2.87"
 wasm-bindgen-futures = "0.4.37"
+gloo-timers = { version = "0.3.0", features = ["futures"] }
+uuid = { version = "1.4.1", features = ["v4"] }
 
 [dependencies.web-sys]
 version = "0.3"
 features = [
     'Blob',
+    'BlobPropertyBag',
     'CssStyleDeclaration',
+    'CustomEvent',
     'ReadableStream',
     'File',
     'FileList',
