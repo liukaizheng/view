@@ -135,7 +135,7 @@ pub fn App() -> impl IntoView {
             n_points = points.len() / 3;
         }
         async move {
-            gloo_timers::future::TimeoutFuture::new(1000).await;
+            gloo_timers::future::TimeoutFuture::new(0).await;
             gpf::polygonlization::make_mesh_for_triangles(&points, &triangles, &tri_in_shells)
         }
     });
