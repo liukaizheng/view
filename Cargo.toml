@@ -7,8 +7,8 @@ edition = "2021"
 
 [dependencies]
 js-sys = "0.3.64"
-leptos = { path = "../leptos/leptos", features = ["csr", "nightly"] }
-gpf = { path = "../gpf" }
+leptos = { version = "0.5.0-rc3", features = ["csr", "nightly"] }
+gpf = { git = "https://github.com/liukaizheng/gpf.git", branch = "main" }
 tobj = { version = "4.0.0", features = ["use_f64"], default-features = false }
 wasm-bindgen = "0.2.87"
 wasm-bindgen-futures = "0.4.37"

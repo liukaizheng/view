@@ -58,7 +58,7 @@ async fn read_obj_from_file(file: web_sys::File) -> Result<RawModel, String> {
             ));
         }
     } else {
-        warn!("failed to read file buffer");
+        leptos::logging::warn!("failed to read file buffer");
     }
     Err("failed to read obj".to_owned())
 }
@@ -147,7 +147,7 @@ pub fn App() -> impl IntoView {
         if fixed_model().is_some() {
             if let Ok(event) = CustomEvent::new("ce_update_list") {
                 if let Err(err) = window().dispatch_event(&event) {
-                    warn!("failed to dispath 'update list' event with error {:?}", err);
+                    leptos::logging::warn!("failed to dispath 'update list' event with error {:?}", err);
                 }
             }
         }
