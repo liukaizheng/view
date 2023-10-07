@@ -195,7 +195,7 @@ pub fn App() -> impl IntoView {
                         <For
                             each = move || models().0.clone()
                             key = |model| model.id
-                            view = move |model: Model| view!{ <Model model/>}
+                            children = move |model: Model| view!{ <Model model/>}
                         />
                     </ul>
                 </div>
