@@ -14,7 +14,7 @@ struct Renderer {
     config: SurfaceConfiguration,
     device: Device,
     queue: Queue,
-    pipline: RenderPipeline,
+    pipeline: RenderPipeline,
 }
 
 impl Renderer {
@@ -32,7 +32,7 @@ impl Renderer {
                 compatible_surface: Some(&surface),
             })
             .await
-            .expect("Failed to find an apporpriate adapter");
+            .expect("Failed to find an appropriate adapter");
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
@@ -98,7 +98,7 @@ impl Renderer {
             device,
             config,
             queue,
-            pipline: render_pipeline,
+            pipeline: render_pipeline,
         }
     }
 
@@ -106,7 +106,7 @@ impl Renderer {
         let frame = self
             .surface
             .get_current_texture()
-            .expect("Falied to acquire next swap chain texture");
+            .expect("Failed to acquire next swap chain texture");
         let view = frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
@@ -126,7 +126,7 @@ impl Renderer {
                 })],
                 depth_stencil_attachment: None,
             });
-            rpass.set_pipeline(&self.pipline);
+            rpass.set_pipeline(&self.pipeline);
             rpass.draw(0..3, 0..1);
         }
 
@@ -142,26 +142,17 @@ pub fn Canvas() -> impl IntoView {
     let render_clone = render.clone();
     let on_mount = move |_| {
         if let Some(canvas) = canvas.get() {
-            // canvas.set_width(1000);
-            // canvas.set_height(1000);
             spawn_local(async move {
                 let canvas = canvas.deref();
-                *render_clone.borrow_mut() = Some(Renderer::new(canvas.clone()).await);
-            })
+                let render = Renderer::new(canvas.clone()).await;
+                render.render();
+                *render_clone.borrow_mut() = Some(render);
+            });
         }
     };
 
-    let on_click = move |_| {
-        let render = render.borrow();
-        if let Some(ref render) = *render {
-            render.render();
-        }
-    };
     let view = view! {
-        <div class = "w-full ml-10">
-            <canvas node_ref = canvas/>
-            <button on:click = on_click>render</button>
-        </div>
+        <canvas node_ref = canvas class = "w-full h-full"/>
     }
     .on_mount(on_mount);
     view

@@ -188,7 +188,7 @@ pub fn ModelList(models: ReadSignal<Models>, set_models: WriteSignal<Models>) ->
     };
 
     view! {
-        <div class = "flex flex-wrap max-w-sm mx-auto mt-10">
+        <div class = "flex flex-wrap max-w-sm mt-10 mr-10">
             <input type = "file" node_ref = file_input id = "add" on:change = on_change accept = ".obj" multiple class ="opacity-0"/>
                 <label for = "add" class = "w-full">
                     <svg viewBox="0 0 24 24" stroke-linecap ="round" class = "w-8 h-8 stroke-emerald-900 bg-emerald-100 stroke-1 hover:stroke-2 hover:bg-emerald-200 rounded-full"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
@@ -226,9 +226,13 @@ pub fn App() -> impl IntoView {
     provide_context(set_models);
 
     view! {
-        <div class = "flex w-full flex-1">
-            <ModelList models set_models />
-            <Canvas />
+        <div class = "flex w-full h-full flex-1">
+            <div>
+                <ModelList models set_models />
+            </div>
+            <div class = "w-full h-full">
+                <Canvas />
+            </div>
         </div>
     }
 }
