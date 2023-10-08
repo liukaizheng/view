@@ -5,6 +5,9 @@ use leptos::*;
 use tobj::Material;
 use web_sys::CustomEvent;
 
+mod canvas;
+use canvas::Canvas;
+
 type RawModel = (Vec<f64>, Vec<usize>);
 
 #[derive(Clone, Debug, PartialEq)]
@@ -118,10 +121,7 @@ pub fn Model(model: Model) -> impl IntoView {
 }
 
 #[component]
-pub fn App() -> impl IntoView {
-    let (models, set_models) = create_signal(Models::new());
-    provide_context(set_models);
-
+pub fn ModelList(models: ReadSignal<Models>, set_models: WriteSignal<Models>) -> impl IntoView {
     let fix_action = create_action(move |_: &()| {
         let mut points = Vec::<f64>::new();
         let mut triangles = Vec::<usize>::new();
@@ -147,7 +147,10 @@ pub fn App() -> impl IntoView {
         if fixed_model().is_some() {
             if let Ok(event) = CustomEvent::new("ce_update_list") {
                 if let Err(err) = window().dispatch_event(&event) {
-                    leptos::logging::warn!("failed to dispath 'update list' event with error {:?}", err);
+                    leptos::logging::warn!(
+                        "failed to dispath 'update list' event with error {:?}",
+                        err
+                    );
                 }
             }
         }
@@ -200,7 +203,7 @@ pub fn App() -> impl IntoView {
                     </ul>
                 </div>
             <button
-                class = "w-20 p-1 mt-3 rounded-full border border-emerald-600 bg-emerald-100 hover:bg-emerald-200"
+                class = "w-20 h-fit p-1 mt-3 rounded-full border border-emerald-600 bg-emerald-100 hover:bg-emerald-200"
                 class:hidden = { move || models.with(|m| m.0.is_empty())}
                 disabled = fix_pending
                 on:click = move |_| {
@@ -213,6 +216,19 @@ pub fn App() -> impl IntoView {
                     })
                 }}
             </button>
+        </div>
+    }
+}
+
+#[component]
+pub fn App() -> impl IntoView {
+    let (models, set_models) = create_signal(Models::new());
+    provide_context(set_models);
+
+    view! {
+        <div class = "flex w-full flex-1">
+            <ModelList models set_models />
+            <Canvas />
         </div>
     }
 }
