@@ -10,7 +10,7 @@ pub struct Renderer {
     adapter: Adapter,
     surface: Surface,
     config: SurfaceConfiguration,
-    device: Device,
+    pub device: Device,
     queue: Queue,
     pipeline: RenderPipeline,
 }

@@ -7,7 +7,7 @@ use web_sys::CustomEvent;
 
 use crate::render::render::Renderer;
 
-mod render;
+pub mod render;
 
 type RawModel = (Vec<f64>, Vec<usize>);
 
@@ -225,17 +225,6 @@ pub fn ModelList(models: ReadSignal<Models>, set_models: WriteSignal<Models>) ->
 pub fn App(canvas: NodeRef<leptos_dom::html::Canvas>) -> impl IntoView {
     let (models, set_models) = create_signal(Models::new());
     provide_context(set_models);
-
-    let render: Rc<RefCell<Option<Renderer>>> = Default::default();
-
-    canvas.on_load(|canvas| {
-        spawn_local(async move {
-            let canvas = canvas.deref();
-            let local_render = Renderer::new(canvas.clone()).await;
-            local_render.render();
-            *render.borrow_mut() = Some(local_render);
-        });
-    });
     
     view! {
         <div class = "flex w-full h-full flex-1">
