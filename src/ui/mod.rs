@@ -3,7 +3,7 @@ use std::{collections::HashMap, io::BufReader};
 use js_sys::Uint8Array;
 use leptos::*;
 use tobj::Material;
-use web_sys::CustomEvent;
+use web_sys::{CustomEvent, HtmlCanvasElement};
 
 mod canvas;
 use canvas::Canvas;
@@ -221,7 +221,7 @@ pub fn ModelList(models: ReadSignal<Models>, set_models: WriteSignal<Models>) ->
 }
 
 #[component]
-pub fn App() -> impl IntoView {
+pub fn App(canvas: NodeRef<leptos_dom::html::Canvas>) -> impl IntoView {
     let (models, set_models) = create_signal(Models::new());
     provide_context(set_models);
 
@@ -231,7 +231,7 @@ pub fn App() -> impl IntoView {
                 <ModelList models set_models />
             </div>
             <div class = "w-full h-full">
-                <Canvas />
+                <Canvas canvas />
             </div>
         </div>
     }

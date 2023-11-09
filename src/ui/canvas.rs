@@ -121,10 +121,13 @@ impl Renderer {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        store: true,
+                        store: wgpu::StoreOp::Store,
                     },
                 })],
                 depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+
             });
             rpass.set_pipeline(&self.pipeline);
             rpass.draw(0..3, 0..1);
@@ -136,24 +139,19 @@ impl Renderer {
 }
 
 #[component]
-pub fn Canvas() -> impl IntoView {
-    let canvas: NodeRef<Canvas> = create_node_ref();
+pub fn Canvas(canvas: NodeRef<Canvas>) -> impl IntoView {
     let render: Rc<RefCell<Option<Renderer>>> = Default::default();
-    let render_clone = render.clone();
-    let on_mount = move |_| {
-        if let Some(canvas) = canvas.get() {
-            spawn_local(async move {
-                let canvas = canvas.deref();
-                let render = Renderer::new(canvas.clone()).await;
-                render.render();
-                *render_clone.borrow_mut() = Some(render);
-            });
-        }
-    };
 
-    let view = view! {
+    canvas.on_load(|canvas| {
+        spawn_local(async move {
+            let canvas = canvas.deref();
+            let local_render = Renderer::new(canvas.clone()).await;
+            local_render.render();
+            *render.borrow_mut() = Some(local_render);
+        });
+    });
+
+    view! {
         <canvas node_ref = canvas class = "w-full h-full"/>
     }
-    .on_mount(on_mount);
-    view
 }

@@ -7,14 +7,17 @@ edition = "2021"
 
 [dependencies]
 js-sys = "0.3.64"
-leptos = { version = "0.5.1", features = ["csr", "nightly"] }
+leptos = { version = "0.5.2", features = ["csr", "nightly"] }
 gpf = { git = "https://github.com/liukaizheng/gpf.git", branch = "main" }
 tobj = { version = "4.0.0", features = ["use_f64"], default-features = false }
 wasm-bindgen = "0.2.87"
 wasm-bindgen-futures = "0.4.37"
 gloo-timers = { version = "0.3.0", features = ["futures"] }
 uuid = { version = "1.4.1", features = ["v4"] }
-wgpu = { version = "0.17.1", features = ["webgl"] }
+wgpu = { version = "0.18.0", features = ["webgl"] }
+pollster = "0.3.0"
+winit = "0.29.3"
+anyhow = "1.0.75"
 
 [dependencies.web-sys]
 version = "0.3"
