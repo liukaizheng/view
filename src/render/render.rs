@@ -3,12 +3,10 @@ use std::cell::RefCell;
 use std::ops::Deref;
 use std::rc::Rc;
 
-use leptos::html::Canvas;
-use leptos::*;
 use web_sys::HtmlCanvasElement;
 use wgpu::{Adapter, Device, Queue, RenderPipeline, Surface, SurfaceConfiguration};
 
-struct Renderer {
+pub struct Renderer {
     adapter: Adapter,
     surface: Surface,
     config: SurfaceConfiguration,
@@ -102,7 +100,7 @@ impl Renderer {
         }
     }
 
-    fn render(&self) {
+    pub fn render(&self) {
         let frame = self
             .surface
             .get_current_texture()
@@ -135,23 +133,5 @@ impl Renderer {
 
         self.queue.submit(Some(encoder.finish()));
         frame.present();
-    }
-}
-
-#[component]
-pub fn Canvas(canvas: NodeRef<Canvas>) -> impl IntoView {
-    let render: Rc<RefCell<Option<Renderer>>> = Default::default();
-
-    canvas.on_load(|canvas| {
-        spawn_local(async move {
-            let canvas = canvas.deref();
-            let local_render = Renderer::new(canvas.clone()).await;
-            local_render.render();
-            *render.borrow_mut() = Some(local_render);
-        });
-    });
-
-    view! {
-        <canvas node_ref = canvas class = "w-full h-full"/>
     }
 }
