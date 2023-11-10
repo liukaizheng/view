@@ -8,28 +8,38 @@ use leptos::html::Canvas;
 use leptos::*;
 use view::render::render::Renderer;
 use view::App;
+use view::render::viewer;
 use winit::event::WindowEvent;
 use winit::platform::web::WindowBuilderExtWebSys;
 use winit::{event, event_loop};
 
 fn main() -> Result<()> {
-    let cs: NodeRef<Canvas> = create_node_ref();
+    let canvas: NodeRef<Canvas> = create_node_ref();
     let render: Rc<RefCell<Option<Renderer>>> = Default::default();
+    let viewer = Rc::new(RefCell::new(viewer::Viewer::new(render.clone())));
 
     let (tx, rx) = mpsc::channel();
     {
         let render = render.clone();
-        cs.on_load(move |canvas: HtmlElement<Canvas>| {
+        canvas.on_load(move |canvas: HtmlElement<Canvas>| {
             let c = canvas.clone();
             spawn_local(async move {
                 let canvas = canvas.deref();
-                let local_render = Renderer::new(canvas.clone()).await;
-                *render.borrow_mut() = Some(local_render);
+                match Renderer::new(canvas.clone()).await {
+                    Ok(r) => {
+                        render.borrow_mut().replace(r);
+                    }
+                    Err(e) => {
+                        logging::error!("{:?}", e);
+                    }
+                }
             });
             tx.send(c.clone()).unwrap();
         });
+
+        let viewer = viewer.clone();
+        leptos::mount_to_body(move || view! { <App canvas viewer = viewer.clone() />});
     }
-    leptos::mount_to_body(move || view! { <App canvas = cs/>});
 
     let event_loop = event_loop::EventLoop::new()?;
     let canvas = rx.recv()?;
@@ -44,7 +54,7 @@ fn main() -> Result<()> {
             }
             WindowEvent::RedrawRequested => {
                 logging::log!("here");
-                render.borrow().as_ref().unwrap().render();
+                viewer.borrow_mut().render().unwrap();
                 window.request_redraw();
             }
             _ => {}

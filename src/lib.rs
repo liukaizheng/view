@@ -5,7 +5,7 @@ use leptos::*;
 use tobj::Material;
 use web_sys::CustomEvent;
 
-use crate::render::render::Renderer;
+use crate::render::viewer::Viewer;
 
 pub mod render;
 
@@ -122,7 +122,7 @@ pub fn Model(model: Model) -> impl IntoView {
 }
 
 #[component]
-pub fn ModelList(models: ReadSignal<Models>, set_models: WriteSignal<Models>) -> impl IntoView {
+pub fn ModelList(models: ReadSignal<Models>, set_models: WriteSignal<Models>, viewer: Rc<RefCell<Viewer>>) -> impl IntoView {
     let fix_action = create_action(move |_: &()| {
         let mut points = Vec::<f64>::new();
         let mut triangles = Vec::<usize>::new();
@@ -149,7 +149,7 @@ pub fn ModelList(models: ReadSignal<Models>, set_models: WriteSignal<Models>) ->
             if let Ok(event) = CustomEvent::new("ce_update_list") {
                 if let Err(err) = window().dispatch_event(&event) {
                     leptos::logging::warn!(
-                        "failed to dispath 'update list' event with error {:?}",
+                        "failed to dispatch 'update list' event with error {:?}",
                         err
                     );
                 }
@@ -175,8 +175,10 @@ pub fn ModelList(models: ReadSignal<Models>, set_models: WriteSignal<Models>) ->
                         .strip_suffix(".obj")
                         .and_then(|s| Some(s.to_owned()))
                     {
+                        let viewer = viewer.clone();
                         spawn_local(async move {
                             if let Ok(raw_model) = read_obj_from_file(file).await {
+                                viewer.borrow_mut().append_mesh(&raw_model.0, &raw_model.1);
                                 set_models.update(|models| {
                                     models.add(Model::new(name, raw_model));
                                 });
@@ -222,14 +224,14 @@ pub fn ModelList(models: ReadSignal<Models>, set_models: WriteSignal<Models>) ->
 }
 
 #[component]
-pub fn App(canvas: NodeRef<leptos_dom::html::Canvas>) -> impl IntoView {
+pub fn App(canvas: NodeRef<leptos_dom::html::Canvas>, viewer: Rc<RefCell<Viewer>>) -> impl IntoView {
     let (models, set_models) = create_signal(Models::new());
     provide_context(set_models);
-    
+
     view! {
         <div class = "flex w-full h-full flex-1">
             <div>
-                <ModelList models set_models />
+                <ModelList models set_models viewer/>
             </div>
             <div class = "w-full h-full">
                 <canvas node_ref = canvas class = "w-full h-full"/>

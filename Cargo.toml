@@ -18,6 +18,9 @@ wgpu = { version = "0.18.0", features = ["webgl"] }
 pollster = "0.3.0"
 winit = "0.29.3"
 anyhow = "1.0.75"
+bitflags = "2.4.1"
+cgmath = "0.18.0"
+bytemuck = "1.14.0"
 
 [dependencies.web-sys]
 version = "0.3"
