@@ -73,8 +73,6 @@ impl ViewData {
                 source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
             });
 
-        leptos::logging::log!("the shader is {:?}", shader);
-
         let render_pipeline_layout =
             render
                 .device
@@ -83,7 +81,6 @@ impl ViewData {
                     bind_group_layouts: &[camera_bind_group_layout],
                     push_constant_ranges: &[],
                 });
-        leptos::logging::log!("the layout is {:?}", render_pipeline_layout);
 
         let render_pipeline =
             render
@@ -100,7 +97,7 @@ impl ViewData {
                             attributes: &[wgpu::VertexAttribute {
                                 offset: 0,
                                 shader_location: 0,
-                                format: wgpu::VertexFormat::Float32,
+                                format: wgpu::VertexFormat::Float32x3,
                             }],
                         }],
                     },
@@ -117,14 +114,15 @@ impl ViewData {
                     multisample: wgpu::MultisampleState::default(),
                     multiview: None,
                 });
-        leptos::logging::log!("12");
 
         let vertex_buffer = render
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("vertex_buffer"),
                 contents: bytemuck::cast_slice(&self.vertices),
-                usage: wgpu::BufferUsages::VERTEX,
+                usage: wgpu::BufferUsages::VERTEX |
+                // allow it to be the destination for [`Queue::write_buffer`] operation 
+                wgpu::BufferUsages::COPY_DST,
             });
 
         let index_buffer = render
@@ -132,7 +130,9 @@ impl ViewData {
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("index_buffer"),
                 contents: bytemuck::cast_slice(&self.triangles),
-                usage: wgpu::BufferUsages::INDEX,
+                usage: wgpu::BufferUsages::INDEX |
+                // allow it to be the destination for [`Queue::write_buffer`] operation
+                wgpu::BufferUsages::COPY_DST,
             });
 
         self.pipeline = Some(MeshPipeline {

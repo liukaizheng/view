@@ -43,7 +43,7 @@ fn main() -> Result<()> {
 
     let event_loop = event_loop::EventLoop::new()?;
     let canvas = rx.recv()?;
-    let window = winit::window::WindowBuilder::new()
+    let _window = winit::window::WindowBuilder::new()
         .with_canvas(Some(canvas.deref().clone()))
         .build(&event_loop)?;
 
@@ -59,6 +59,13 @@ fn main() -> Result<()> {
                     logging::log!("success");
                 }
             }
+            /*WindowEvent::Resized(size) => {
+                let viewer = viewer.borrow();
+                let mut render = viewer.render.borrow_mut();
+                let render = render.as_mut().unwrap();
+                render.width = size.width;
+                render.height = size.height;
+            }*/
             _ => {}
         },
         _ => {}

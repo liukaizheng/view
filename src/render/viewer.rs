@@ -4,7 +4,7 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use super::{render::Renderer, view_core::ViewCore, view_data::ViewData};
 
 pub struct Viewer {
-    render: Rc<RefCell<Option<Renderer>>>,
+    pub render: Rc<RefCell<Option<Renderer>>>,
     data: HashMap<u32, ViewData>,
     next_data_id: u32,
     view_core: ViewCore,
@@ -45,7 +45,7 @@ impl Viewer {
                         view: &view,
                         resolve_target: None,
                         ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                            load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
                             store: wgpu::StoreOp::Store,
                         },
                     })],

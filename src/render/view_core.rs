@@ -6,10 +6,11 @@ use super::{
     BBox,
 };
 
-use wgpu::{util::DeviceExt, BindGroupLayout, Buffer};
+use wgpu::{util::DeviceExt, BindGroup, BindGroupLayout, Buffer};
 
 struct ViewBuffer {
     camera_bind_group_layout: BindGroupLayout,
+    camera_bind_group: BindGroup,
     camera_buffer: Buffer,
 }
 
@@ -79,12 +80,21 @@ impl ViewCore {
                         contents: bytemuck::cast_slice(&[0.0f32; 16]),
                         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
                     });
+
+            let camera_bind_group = render.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                layout: &camera_bind_group_layout,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: camera_buffer.as_entire_binding(),
+                }],
+                label: None,
+            });
             self.view_buffer = Some(ViewBuffer {
                 camera_bind_group_layout,
+                camera_bind_group,
                 camera_buffer,
             });
         }
-        leptos::logging::log!("1");
         let mut has_dirty_data = false;
         for data in data_map.values_mut() {
             if data.pipeline.is_none() {
@@ -93,20 +103,17 @@ impl ViewCore {
                     &self.view_buffer.as_ref().unwrap().camera_bind_group_layout,
                 );
             }
-            leptos::logging::log!("2");
             if data.dirty.contains(DirtyFlags::DIRTY_VERTEX) {
                 has_dirty_data = true;
                 data.update_vertex_buffer(render);
                 data.dirty.remove(DirtyFlags::DIRTY_VERTEX);
             }
-            leptos::logging::log!("3");
 
             if data.dirty.contains(DirtyFlags::DIRTY_FACE) {
                 data.update_face_buffer(render);
                 data.dirty.remove(DirtyFlags::DIRTY_FACE);
             }
         }
-        leptos::logging::log!("4");
 
         if has_dirty_data {
             let mut bbox = BBox::default();
@@ -121,6 +128,11 @@ impl ViewCore {
             self.update_matrix(render);
         }
 
+        render_pass.set_bind_group(
+            0,
+            &self.view_buffer.as_ref().unwrap().camera_bind_group,
+            &[],
+        );
         for data in data_map.values() {
             data.render(render_pass);
         }
