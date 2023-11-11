@@ -47,10 +47,11 @@ impl Default for ViewCore {
 }
 
 impl ViewCore {
-    pub(crate) fn render<'a>(
-        &mut self,
-        render: &Renderer,
-        data_map: &mut std::collections::HashMap<u32, ViewData>,
+    pub(crate) fn render<'b, 'a: 'b>(
+        &'a mut self,
+        render: &'a Renderer,
+        render_pass: &'b mut wgpu::RenderPass<'a>,
+        data_map: &'a mut std::collections::HashMap<u32, ViewData>,
         update_matrix: bool,
     ) {
         if self.view_buffer.is_none() {
@@ -83,6 +84,7 @@ impl ViewCore {
                 camera_buffer,
             });
         }
+        leptos::logging::log!("1");
         let mut has_dirty_data = false;
         for data in data_map.values_mut() {
             if data.pipeline.is_none() {
@@ -91,11 +93,20 @@ impl ViewCore {
                     &self.view_buffer.as_ref().unwrap().camera_bind_group_layout,
                 );
             }
+            leptos::logging::log!("2");
             if data.dirty.contains(DirtyFlags::DIRTY_VERTEX) {
                 has_dirty_data = true;
-                data.update_box();
+                data.update_vertex_buffer(render);
+                data.dirty.remove(DirtyFlags::DIRTY_VERTEX);
+            }
+            leptos::logging::log!("3");
+
+            if data.dirty.contains(DirtyFlags::DIRTY_FACE) {
+                data.update_face_buffer(render);
+                data.dirty.remove(DirtyFlags::DIRTY_FACE);
             }
         }
+        leptos::logging::log!("4");
 
         if has_dirty_data {
             let mut bbox = BBox::default();
@@ -109,6 +120,10 @@ impl ViewCore {
         if has_dirty_data || update_matrix {
             self.update_matrix(render);
         }
+
+        for data in data_map.values() {
+            data.render(render_pass);
+        }
     }
 
     fn update_matrix(&self, render: &Renderer) {
@@ -121,7 +136,9 @@ impl ViewCore {
         let mat = proj * look_at * view;
         let data: [[f32; 4]; 4] = mat.into();
         render.queue.write_buffer(
-            &self.view_buffer.as_ref().unwrap().camera_buffer, 0, bytemuck::cast_slice(&data));
-
+            &self.view_buffer.as_ref().unwrap().camera_buffer,
+            0,
+            bytemuck::cast_slice(&data),
+        );
     }
 }

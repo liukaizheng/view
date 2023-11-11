@@ -7,8 +7,8 @@ use anyhow::Result;
 use leptos::html::Canvas;
 use leptos::*;
 use view::render::render::Renderer;
-use view::App;
 use view::render::viewer;
+use view::App;
 use winit::event::WindowEvent;
 use winit::platform::web::WindowBuilderExtWebSys;
 use winit::{event, event_loop};
@@ -53,9 +53,11 @@ fn main() -> Result<()> {
                 leptos::logging::log!("{:?}", event);
             }
             WindowEvent::RedrawRequested => {
-                logging::log!("here");
-                viewer.borrow_mut().render().unwrap();
-                window.request_redraw();
+                if let Err(msg) = viewer.borrow_mut().render() {
+                    logging::error!("faild to render because {:?}", msg);
+                } else {
+                    logging::log!("success");
+                }
             }
             _ => {}
         },

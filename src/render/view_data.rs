@@ -1,7 +1,7 @@
 use super::{render::Renderer, BBox};
 
 use cgmath::Vector3;
-use wgpu::{RenderPipeline, util::DeviceExt, Buffer};
+use wgpu::{util::DeviceExt, Buffer, RenderPass, RenderPipeline};
 
 #[inline]
 fn box_from_points(points: &[f32]) -> BBox {
@@ -61,7 +61,11 @@ impl ViewData {
         }
     }
 
-    pub(crate) fn init_pipline(&mut self, render: &Renderer, camera_bind_group_layout: &wgpu::BindGroupLayout) {
+    pub(crate) fn init_pipline(
+        &mut self,
+        render: &Renderer,
+        camera_bind_group_layout: &wgpu::BindGroupLayout,
+    ) {
         let shader = render
             .device
             .create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -69,67 +73,107 @@ impl ViewData {
                 source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
             });
 
-        let render_pipeline_layout = render.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("render_pipeline_layout"),
-            bind_group_layouts: &[camera_bind_group_layout],
-            push_constant_ranges: &[],
-        });
+        leptos::logging::log!("the shader is {:?}", shader);
 
-        let render_pipeline = render.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("render_pipeline"),
-            layout: Some(&render_pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: "vs_main",
-                buffers: &[wgpu::VertexBufferLayout {
-                    array_stride: 3 * std::mem::size_of::<f32>() as u64,
-                    step_mode: wgpu::VertexStepMode::Vertex,
-                    attributes: &[wgpu::VertexAttribute {
-                        offset: 0,
-                        shader_location: 0,
-                        format: wgpu::VertexFormat::Float32,
-                    }],
-                }],
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: "fs_main",
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: render.config.format,
-                    blend: Some(wgpu::BlendState::REPLACE),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                ..Default::default()
-            },
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-            multiview: None,
-        });
+        let render_pipeline_layout =
+            render
+                .device
+                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                    label: Some("render_pipeline_layout"),
+                    bind_group_layouts: &[camera_bind_group_layout],
+                    push_constant_ranges: &[],
+                });
+        leptos::logging::log!("the layout is {:?}", render_pipeline_layout);
 
-        let vertex_buffer = render.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("vertex_buffer"),
-            contents: bytemuck::cast_slice(&self.vertices),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
+        let render_pipeline =
+            render
+                .device
+                .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                    label: Some("render_pipeline"),
+                    layout: Some(&render_pipeline_layout),
+                    vertex: wgpu::VertexState {
+                        module: &shader,
+                        entry_point: "vs_main",
+                        buffers: &[wgpu::VertexBufferLayout {
+                            array_stride: 3 * std::mem::size_of::<f32>() as u64,
+                            step_mode: wgpu::VertexStepMode::Vertex,
+                            attributes: &[wgpu::VertexAttribute {
+                                offset: 0,
+                                shader_location: 0,
+                                format: wgpu::VertexFormat::Float32,
+                            }],
+                        }],
+                    },
+                    fragment: Some(wgpu::FragmentState {
+                        module: &shader,
+                        entry_point: "fs_main",
+                        targets: &[Some(render.config.format.into())],
+                    }),
+                    primitive: wgpu::PrimitiveState {
+                        topology: wgpu::PrimitiveTopology::TriangleList,
+                        ..Default::default()
+                    },
+                    depth_stencil: None,
+                    multisample: wgpu::MultisampleState::default(),
+                    multiview: None,
+                });
+        leptos::logging::log!("12");
 
-        let index_buffer = render.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("index_buffer"),
-            contents: bytemuck::cast_slice(&self.triangles),
-            usage: wgpu::BufferUsages::INDEX,
-        });
+        let vertex_buffer = render
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("vertex_buffer"),
+                contents: bytemuck::cast_slice(&self.vertices),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
+
+        let index_buffer = render
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("index_buffer"),
+                contents: bytemuck::cast_slice(&self.triangles),
+                usage: wgpu::BufferUsages::INDEX,
+            });
 
         self.pipeline = Some(MeshPipeline {
             pipeline: render_pipeline,
             vertex_buffer,
-            index_buffer
-         });
+            index_buffer,
+        });
     }
 
     #[inline]
-    pub(crate) fn update_box(&mut self) {
+    fn update_box(&mut self) {
         self.bbox = box_from_points(&self.vertices);
+    }
+
+    #[inline]
+    pub(crate) fn update_vertex_buffer(&mut self, render: &Renderer) {
+        render.queue.write_buffer(
+            &self.pipeline.as_ref().unwrap().vertex_buffer,
+            0,
+            bytemuck::cast_slice(&self.vertices),
+        );
+        self.update_box();
+    }
+
+    #[inline]
+    pub(crate) fn update_face_buffer(&mut self, render: &Renderer) {
+        render.queue.write_buffer(
+            &self.pipeline.as_ref().unwrap().index_buffer,
+            0,
+            bytemuck::cast_slice(&self.triangles),
+        );
+    }
+
+    pub(crate) fn render<'b, 'a: 'b>(&'a self, render_pass: &'b mut RenderPass<'a>) {
+        let pipeline_data = self.pipeline.as_ref().unwrap();
+        render_pass.set_pipeline(&pipeline_data.pipeline);
+        render_pass.set_vertex_buffer(0, pipeline_data.vertex_buffer.slice(..));
+        render_pass.set_index_buffer(
+            pipeline_data.index_buffer.slice(..),
+            wgpu::IndexFormat::Uint32,
+        );
+        render_pass.draw_indexed(0..self.triangles.len() as u32, 0, 0..1);
     }
 }

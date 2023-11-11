@@ -4,7 +4,7 @@ use wgpu::{Adapter, Device, Queue, Surface, SurfaceConfiguration};
 
 pub struct Renderer {
     adapter: Adapter,
-    surface: Surface,
+    pub surface: Surface,
     pub config: SurfaceConfiguration,
     pub device: Device,
     pub queue: Queue,
@@ -67,9 +67,7 @@ impl Renderer {
     }
 
     pub fn render(&self) -> Result<()> {
-        let texture = self
-            .surface
-            .get_current_texture()?;
+        let texture = self.surface.get_current_texture()?;
         let view = texture
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
@@ -77,20 +75,19 @@ impl Renderer {
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: None,
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-
-            });
+            label: None,
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
         render_pass.set_viewport(0.0, 0.0, self.width as f32, self.height as f32, 0.0, 1.0);
         Ok(())
     }

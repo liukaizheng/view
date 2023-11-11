@@ -1,7 +1,7 @@
-use std::{collections::HashMap, rc::Rc, cell::RefCell};
 use anyhow::Result;
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use super::{view_data::ViewData, render::Renderer, view_core::ViewCore};
+use super::{render::Renderer, view_core::ViewCore, view_data::ViewData};
 
 pub struct Viewer {
     render: Rc<RefCell<Option<Renderer>>>,
@@ -31,8 +31,41 @@ impl Viewer {
 
     pub fn render(&mut self) -> Result<()> {
         if let Some(render) = self.render.borrow().as_ref() {
-            render.render()?;
-            self.view_core.render(render, &mut self.data, true);
+            let texture = render.surface.get_current_texture()?;
+            let view = texture
+                .texture
+                .create_view(&wgpu::TextureViewDescriptor::default());
+            let mut encoder = render
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+            {
+                let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: None,
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &view,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                });
+                render_pass.set_viewport(
+                    0.0,
+                    0.0,
+                    render.width as f32,
+                    render.height as f32,
+                    0.0,
+                    1.0,
+                );
+                self.view_core
+                    .render(render, &mut render_pass, &mut self.data, true);
+            }
+            render.queue.submit(std::iter::once(encoder.finish()));
+            texture.present();
         } else {
             leptos::logging::log!("render is None");
         }
