@@ -1,13 +1,23 @@
 use anyhow::Result;
+use cgmath::{InnerSpace, Quaternion, Rad, Rotation3, Vector3};
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use winit::dpi::PhysicalPosition;
 
 use super::{render::Renderer, view_core::ViewCore, view_data::ViewData};
+pub enum MousePressed {
+    Left(Option<(PhysicalPosition<f64>, Quaternion<f32>)>),
+    Right(Option<PhysicalPosition<f64>>),
+    None,
+}
 
 pub struct Viewer {
     pub render: Rc<RefCell<Option<Renderer>>>,
     data: HashMap<u32, ViewData>,
     next_data_id: u32,
     view_core: ViewCore,
+
+    current_pos: PhysicalPosition<f64>,
+    pub pressed_state: MousePressed,
 }
 
 impl Viewer {
@@ -17,6 +27,8 @@ impl Viewer {
             data: HashMap::new(),
             next_data_id: 0,
             view_core: ViewCore::default(),
+            current_pos: PhysicalPosition { x: 0.0, y: 0.0 },
+            pressed_state: MousePressed::None,
         }
     }
 
@@ -64,4 +76,64 @@ impl Viewer {
         }
         Result::Ok(())
     }
+
+    pub fn mouse_move(&mut self, pos: PhysicalPosition<f64>) {
+        self.current_pos = pos;
+        match &mut self.pressed_state {
+            MousePressed::Left(left_pos) => {
+                if left_pos.is_none() {
+                    left_pos.replace((pos, self.view_core.trackball_angle));
+                }
+            }
+            MousePressed::Right(right_pos) => {
+                if right_pos.is_none() {
+                    right_pos.replace(pos);
+                }
+            }
+            MousePressed::None => {}
+        }
+
+        self.current_pos = pos;
+
+        match &self.pressed_state {
+            MousePressed::Left(left) => {
+                let (press_pos, press_quat) = left.as_ref().unwrap();
+                let render = self.render.borrow();
+                let render = render.as_ref().unwrap();
+                let quat = two_axis_valuator_fixed_up(
+                    render.w(),
+                    render.h(),
+                    2.0,
+                    press_quat,
+                    press_pos,
+                    &pos,
+                );
+                self.view_core.trackball_angle = quat;
+            }
+            _ => {}
+        }
+    }
+}
+
+fn two_axis_valuator_fixed_up(
+    w: u32,
+    h: u32,
+    speed: f32,
+    press_quat: &Quaternion<f32>,
+    press_pos: &PhysicalPosition<f64>,
+    pos: &PhysicalPosition<f64>,
+) -> Quaternion<f32> {
+    const AXIS_X: Vector3<f32> = Vector3::new(1.0, 0.0, 0.0);
+    const AXIS_Y: Vector3<f32> = Vector3::new(0.0, 1.0, 0.0);
+    let mut quat = Quaternion::<f32>::from_axis_angle(
+        AXIS_Y,
+        Rad::<f32>(((pos.x - press_pos.x) as f32) / (w as f32) * speed),
+    ) * Quaternion::<f32>::from_axis_angle(
+        AXIS_X,
+        Rad::<f32>(((pos.y - press_pos.y) as f32) / (h as f32) * speed),
+    ) * press_quat;
+
+    let len = quat.magnitude();
+    quat /= len;
+    quat
 }

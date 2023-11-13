@@ -1,4 +1,4 @@
-use cgmath::{Matrix4, Point3, Vector3};
+use cgmath::{Matrix4, Point3, Quaternion, Vector3};
 
 use super::{
     render::Renderer,
@@ -25,6 +25,9 @@ pub(crate) struct ViewCore {
     camera_eye: Point3<f32>,
     camera_center: Point3<f32>,
     camera_up: Vector3<f32>,
+
+    pub trackball_angle: Quaternion<f32>,
+
     view_buffer: Option<ViewBuffer>,
 }
 
@@ -41,6 +44,8 @@ impl Default for ViewCore {
             camera_eye: Point3::new(0.0, 0.0, 5.0),
             camera_center: Point3::new(0.0, 0.0, 0.0),
             camera_up: Vector3::new(0.0, 1.0, 0.0),
+
+            trackball_angle: Quaternion::<f32>::new(1.0, 0.0, 0.0, 0.0),
 
             view_buffer: None,
         }
@@ -140,6 +145,7 @@ impl ViewCore {
 
     fn update_matrix(&self, render: &Renderer) {
         let view = Matrix4::from_scale(self.camera_base_zoom)
+            * Matrix4::from(self.trackball_angle)
             * Matrix4::from_translation(self.camera_base_translation);
         let look_at = Matrix4::look_at_rh(self.camera_eye, self.camera_center, self.camera_up);
         let w = render.w() as f32;

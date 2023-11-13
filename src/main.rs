@@ -7,7 +7,7 @@ use anyhow::Result;
 use leptos::html::Canvas;
 use leptos::*;
 use view::render::render::Renderer;
-use view::render::viewer;
+use view::render::viewer::{self, MousePressed};
 use view::App;
 use winit::event::WindowEvent;
 use winit::platform::web::WindowBuilderExtWebSys;
@@ -43,7 +43,7 @@ fn main() -> Result<()> {
 
     let event_loop = event_loop::EventLoop::new()?;
     let canvas = rx.recv()?;
-    let _window = winit::window::WindowBuilder::new()
+    let window = winit::window::WindowBuilder::new()
         .with_canvas(Some(canvas.deref().clone()))
         .build(&event_loop)?;
 
@@ -52,13 +52,37 @@ fn main() -> Result<()> {
             WindowEvent::KeyboardInput { event, .. } => {
                 leptos::logging::log!("{:?}", event);
             }
+
+            WindowEvent::CursorMoved { device_id: _, position } => {
+                viewer.borrow_mut().mouse_move(position);
+            }
+
+            WindowEvent::MouseInput { device_id: _, state, button } => {
+                match state  {
+                    event::ElementState::Pressed => {
+                        match button {
+                            event::MouseButton::Left => {
+                                viewer.borrow_mut().pressed_state = MousePressed::Left(None);
+                            }
+                            _ => {}
+                        }
+
+                    }
+                    event::ElementState::Released => {
+                        viewer.borrow_mut().pressed_state = MousePressed::None;
+                    }
+                }
+            }
+
             WindowEvent::RedrawRequested => {
                 if let Err(msg) = viewer.borrow_mut().render() {
                     logging::error!("faild to render because {:?}", msg);
                 } else {
                     logging::log!("success");
+                    window.request_redraw();
                 }
             }
+
             WindowEvent::Resized(size) => {
                 let viewer = viewer.borrow();
                 let mut render = viewer.render.borrow_mut();
