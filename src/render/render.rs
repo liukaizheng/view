@@ -1,15 +1,12 @@
 use anyhow::Result;
 use web_sys::HtmlCanvasElement;
-use wgpu::{Adapter, Device, Queue, Surface, SurfaceConfiguration};
+use wgpu::{Device, Queue, Surface, SurfaceConfiguration};
 
 pub struct Renderer {
-    adapter: Adapter,
     pub surface: Surface,
     pub config: SurfaceConfiguration,
     pub device: Device,
     pub queue: Queue,
-    pub width: u32,
-    pub height: u32,
 }
 
 impl Renderer {
@@ -56,39 +53,26 @@ impl Renderer {
         surface.configure(&device, &config);
 
         Ok(Self {
-            adapter,
             surface,
             device,
             config,
             queue,
-            width,
-            height,
         })
     }
 
-    pub fn render(&self) -> Result<()> {
-        let texture = self.surface.get_current_texture()?;
-        let view = texture
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: None,
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: None,
-            timestamp_writes: None,
-            occlusion_query_set: None,
-        });
-        render_pass.set_viewport(0.0, 0.0, self.width as f32, self.height as f32, 0.0, 1.0);
-        Ok(())
+    #[inline]
+    pub fn w(&self) -> u32 {
+        self.config.width
+    }
+
+    #[inline]
+    pub fn h(&self) -> u32 {
+        self.config.height
+    }
+
+    pub fn resize(&mut self, w: u32, h: u32) {
+        self.config.width = w;
+        self.config.height = h;
+        self.surface.configure(&self.device, &self.config);
     }
 }

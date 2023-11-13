@@ -1,4 +1,4 @@
-use std::{collections::HashMap, io::BufReader, ops::Deref, rc::Rc, cell::RefCell};
+use std::{cell::RefCell, collections::HashMap, io::BufReader, rc::Rc};
 
 use js_sys::Uint8Array;
 use leptos::*;
@@ -122,7 +122,11 @@ pub fn Model(model: Model) -> impl IntoView {
 }
 
 #[component]
-pub fn ModelList(models: ReadSignal<Models>, set_models: WriteSignal<Models>, viewer: Rc<RefCell<Viewer>>) -> impl IntoView {
+pub fn ModelList(
+    models: ReadSignal<Models>,
+    set_models: WriteSignal<Models>,
+    viewer: Rc<RefCell<Viewer>>,
+) -> impl IntoView {
     let fix_action = create_action(move |_: &()| {
         let mut points = Vec::<f64>::new();
         let mut triangles = Vec::<usize>::new();
@@ -224,7 +228,10 @@ pub fn ModelList(models: ReadSignal<Models>, set_models: WriteSignal<Models>, vi
 }
 
 #[component]
-pub fn App(canvas: NodeRef<leptos_dom::html::Canvas>, viewer: Rc<RefCell<Viewer>>) -> impl IntoView {
+pub fn App(
+    canvas: NodeRef<leptos_dom::html::Canvas>,
+    viewer: Rc<RefCell<Viewer>>,
+) -> impl IntoView {
     let (models, set_models) = create_signal(Models::new());
     provide_context(set_models);
 

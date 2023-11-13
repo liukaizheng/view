@@ -142,8 +142,8 @@ impl ViewCore {
         let view = Matrix4::from_scale(self.camera_base_zoom)
             * Matrix4::from_translation(self.camera_base_translation);
         let look_at = Matrix4::look_at_rh(self.camera_eye, self.camera_center, self.camera_up);
-        let w = render.width as f32;
-        let h = render.height as f32;
+        let w = render.w() as f32;
+        let h = render.h() as f32;
         let proj = cgmath::perspective(self.camera_fov, w / h, self.camera_near, self.camera_far);
         let mat = proj * look_at * view;
         let data: [[f32; 4]; 4] = mat.into();

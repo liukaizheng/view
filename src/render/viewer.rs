@@ -45,7 +45,7 @@ impl Viewer {
                         view: &view,
                         resolve_target: None,
                         ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
+                            load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                             store: wgpu::StoreOp::Store,
                         },
                     })],
@@ -53,14 +53,7 @@ impl Viewer {
                     timestamp_writes: None,
                     occlusion_query_set: None,
                 });
-                render_pass.set_viewport(
-                    0.0,
-                    0.0,
-                    render.width as f32,
-                    render.height as f32,
-                    0.0,
-                    1.0,
-                );
+                render_pass.set_viewport(0.0, 0.0, render.w() as f32, render.h() as f32, 0.0, 1.0);
                 self.view_core
                     .render(render, &mut render_pass, &mut self.data, true);
             }

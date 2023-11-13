@@ -59,13 +59,11 @@ fn main() -> Result<()> {
                     logging::log!("success");
                 }
             }
-            /*WindowEvent::Resized(size) => {
+            WindowEvent::Resized(size) => {
                 let viewer = viewer.borrow();
                 let mut render = viewer.render.borrow_mut();
-                let render = render.as_mut().unwrap();
-                render.width = size.width;
-                render.height = size.height;
-            }*/
+                render.as_mut().unwrap().resize(size.width, size.height);
+            }
             _ => {}
         },
         _ => {}
