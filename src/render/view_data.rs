@@ -1,7 +1,7 @@
 use super::{render::Renderer, BBox};
 
 use cgmath::Vector3;
-use wgpu::{util::DeviceExt, Buffer, RenderPass, RenderPipeline};
+use wgpu::{util::DeviceExt, Buffer, CompareFunction, RenderPass, RenderPipeline, TextureFormat};
 
 #[inline]
 fn box_from_points(points: &[f32]) -> BBox {
@@ -108,9 +108,17 @@ impl ViewData {
                     }),
                     primitive: wgpu::PrimitiveState {
                         topology: wgpu::PrimitiveTopology::TriangleList,
+                        front_face: wgpu::FrontFace::Ccw,
+                        cull_mode: Some(wgpu::Face::Back),
                         ..Default::default()
                     },
-                    depth_stencil: None,
+                    depth_stencil: Some(wgpu::DepthStencilState {
+                        format: TextureFormat::Depth32Float,
+                        depth_write_enabled: true,
+                        depth_compare: CompareFunction::Less,
+                        stencil: wgpu::StencilState::default(),
+                        bias: wgpu::DepthBiasState::default(),
+                    }),
                     multisample: wgpu::MultisampleState::default(),
                     multiview: None,
                 });
@@ -121,7 +129,7 @@ impl ViewData {
                 label: Some("vertex_buffer"),
                 contents: bytemuck::cast_slice(&self.vertices),
                 usage: wgpu::BufferUsages::VERTEX |
-                // allow it to be the destination for [`Queue::write_buffer`] operation 
+                // allow it to be the destination for [`Queue::write_buffer`] operation
                 wgpu::BufferUsages::COPY_DST,
             });
 

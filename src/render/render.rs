@@ -1,12 +1,13 @@
 use anyhow::Result;
 use web_sys::HtmlCanvasElement;
-use wgpu::{Device, Queue, Surface, SurfaceConfiguration};
+use wgpu::{Device, Queue, Surface, SurfaceConfiguration, TextureView};
 
 pub struct Renderer {
     pub surface: Surface,
     pub config: SurfaceConfiguration,
     pub device: Device,
     pub queue: Queue,
+    pub depth_texture_view: TextureView,
 }
 
 impl Renderer {
@@ -52,11 +53,14 @@ impl Renderer {
 
         surface.configure(&device, &config);
 
+
+        let depth_texture_view = Self::create_depth_texture(&config, &device);
         Ok(Self {
             surface,
             device,
             config,
             queue,
+            depth_texture_view,
         })
     }
 
@@ -70,9 +74,31 @@ impl Renderer {
         self.config.height
     }
 
+    fn create_depth_texture(
+        config: &SurfaceConfiguration,
+        device: &Device,
+    ) -> TextureView {
+        let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            size: wgpu::Extent3d {
+                width: config.width,
+                height: config.height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Depth32Float,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        });
+        depth_texture.create_view(&wgpu::TextureViewDescriptor::default())
+    }
+
     pub fn resize(&mut self, w: u32, h: u32) {
         self.config.width = w;
         self.config.height = h;
         self.surface.configure(&self.device, &self.config);
+        Self::create_depth_texture(&self.config, &self.device);
     }
 }
