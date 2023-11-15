@@ -99,6 +99,6 @@ impl Renderer {
         self.config.width = w;
         self.config.height = h;
         self.surface.configure(&self.device, &self.config);
-        Self::create_depth_texture(&self.config, &self.device);
+        self.depth_texture_view = Self::create_depth_texture(&self.config, &self.device);
     }
 }
