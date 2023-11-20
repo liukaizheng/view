@@ -182,7 +182,7 @@ pub fn ModelList(
                         let viewer = viewer.clone();
                         spawn_local(async move {
                             if let Ok(raw_model) = read_obj_from_file(file).await {
-                                viewer.borrow_mut().append_mesh(&raw_model.0, &raw_model.1);
+                                viewer.borrow_mut().append_mesh(&raw_model.0, &raw_model.1, None);
                                 set_models.update(|models| {
                                     models.add(Model::new(name, raw_model));
                                 });

@@ -37,6 +37,29 @@ bitflags::bitflags! {
     }
 }
 
+pub(crate) struct Material {
+    /// ambient color
+    pub ka: Vector3<f32>,
+    /// diffuse color
+    pub kd: Vector3<f32>,
+    /// specular color
+    pub ks: Vector3<f32>,
+}
+
+impl Material {
+    pub(crate) fn new(color: Vector3<f32>) -> Self {
+        let kd = color;
+        let ka = kd * 0.1;
+        const GREY: Vector3<f32> = Vector3::new(0.3, 0.3, 0.3);
+        let ks = GREY + 0.1 * (kd - GREY);
+        Self {
+            ka,
+            kd,
+            ks,
+        }
+    }
+}
+
 pub(crate) struct MeshPipeline {
     pipeline: RenderPipeline,
     vertex_buffer: Buffer,
@@ -45,16 +68,18 @@ pub(crate) struct MeshPipeline {
 pub(crate) struct ViewData {
     vertices: Vec<f32>,
     triangles: Vec<u32>,
+    material: Material,
     pub(crate) dirty: DirtyFlags,
     pub(crate) bbox: BBox,
     pub(crate) pipeline: Option<MeshPipeline>,
 }
 
 impl ViewData {
-    pub(crate) fn new(vertices: Vec<f32>, triangles: Vec<u32>) -> Self {
+    pub(crate) fn new(vertices: Vec<f32>, triangles: Vec<u32>, material: Material) -> Self {
         Self {
             vertices,
             triangles,
+            material,
             dirty: DirtyFlags::DIRTY_ALL,
             bbox: BBox::default(),
             pipeline: None,

@@ -11,10 +11,13 @@ use wgpu::{util::DeviceExt, BindGroup, BindGroupLayout, Buffer};
 struct ViewBuffer {
     camera_bind_group_layout: BindGroupLayout,
     camera_bind_group: BindGroup,
-    camera_buffer: Buffer,
+    view_buffer: Buffer,
+    proj_buffer: Buffer,
 }
 
 pub(crate) struct ViewCore {
+    light_position: Vector3<f32>,
+
     camera_base_zoom: f32,
     camera_base_translation: Vector3<f32>,
 
@@ -34,6 +37,7 @@ pub(crate) struct ViewCore {
 impl Default for ViewCore {
     fn default() -> Self {
         Self {
+            light_position: Vector3::new(0.0, 0.3, 0.0),
             camera_base_zoom: 1.0,
             camera_base_translation: Vector3::new(0.0, 0.0, 0.0),
 
@@ -75,29 +79,78 @@ impl ViewCore {
                                 min_binding_size: None,
                             },
                             count: None,
-                        }],
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: wgpu::ShaderStages::VERTEX,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Uniform,
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 2,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Uniform,
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        }
+                        ],
                     });
-            let camera_buffer =
+
+            let view_buffer =
                 render
                     .device
                     .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("camera_buffer"),
+                        label: Some("view_buffer"),
                         contents: bytemuck::cast_slice(&[0.0f32; 16]),
                         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
                     });
+
+            let proj_buffer =
+                render
+                    .device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("proj_buffer"),
+                        contents: bytemuck::cast_slice(&[0.0f32; 16]),
+                        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                    });
+
+            let light_position_buffer = render
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("light_position_buffer"),
+                    contents: bytemuck::cast_slice(&[self.light_position.x, self.light_position.y, self.light_position.z]),
+                    usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                });
 
             let camera_bind_group = render.device.create_bind_group(&wgpu::BindGroupDescriptor {
                 layout: &camera_bind_group_layout,
                 entries: &[wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: camera_buffer.as_entire_binding(),
-                }],
+                    resource: view_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: proj_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: light_position_buffer.as_entire_binding(),
+                }
+                ],
                 label: None,
             });
             self.view_buffer = Some(ViewBuffer {
                 camera_bind_group_layout,
                 camera_bind_group,
-                camera_buffer,
+                view_buffer,
+                proj_buffer,
             });
         }
         let mut has_dirty_data = false;
@@ -144,19 +197,23 @@ impl ViewCore {
     }
 
     fn update_matrix(&self, render: &Renderer) {
-        let view = Matrix4::from_scale(self.camera_base_zoom)
+        let view = Matrix4::look_at_rh(self.camera_eye, self.camera_center, self.camera_up) * Matrix4::from_scale(self.camera_base_zoom)
             * Matrix4::from(self.trackball_angle)
             * Matrix4::from_translation(self.camera_base_translation);
-        let look_at = Matrix4::look_at_rh(self.camera_eye, self.camera_center, self.camera_up);
         let w = render.w() as f32;
         let h = render.h() as f32;
         let proj = cgmath::perspective(self.camera_fov, w / h, self.camera_near, self.camera_far);
-        let mat = proj * look_at * view;
-        let data: [[f32; 4]; 4] = mat.into();
+        let view_data: [[f32; 4]; 4] = view.into();
+        let proj_data: [[f32; 4]; 4] = proj.into();
         render.queue.write_buffer(
-            &self.view_buffer.as_ref().unwrap().camera_buffer,
+            &self.view_buffer.as_ref().unwrap().view_buffer,
             0,
-            bytemuck::cast_slice(&data),
+            bytemuck::cast_slice(&view_data),
+        );
+        render.queue.write_buffer(
+            &self.view_buffer.as_ref().unwrap().proj_buffer,
+            0,
+            bytemuck::cast_slice(&proj_data),
         );
     }
 }

@@ -2,6 +2,9 @@ use anyhow::Result;
 use cgmath::{InnerSpace, Quaternion, Rad, Rotation3, Vector3};
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use winit::dpi::PhysicalPosition;
+use rand::{distributions::{Distribution, Uniform}, SeedableRng};
+
+use crate::render::view_data::Material;
 
 use super::{render::Renderer, view_core::ViewCore, view_data::ViewData};
 pub enum MousePressed {
@@ -32,10 +35,21 @@ impl Viewer {
         }
     }
 
-    pub fn append_mesh(&mut self, points: &[f64], triangles: &[usize]) {
+    pub fn append_mesh(&mut self, points: &[f64], triangles: &[usize], color: Option<Vector3<f32>>) {
         let points = Vec::from_iter(points.iter().map(|&x| x as f32));
         let triangles = Vec::from_iter(triangles.iter().map(|&i| i as u32));
-        let data = ViewData::new(points, triangles);
+        let data_color = if let Some(color) = color {
+            color
+        } else {
+            let mut rng = rand::rngs::SmallRng::from_entropy();
+            let between = Uniform::from(0.0..1.0);
+            Vector3::new(
+                between.sample(&mut rng),
+                between.sample(&mut rng),
+                between.sample(&mut rng),
+            )
+        };
+        let data = ViewData::new(points, triangles, Material::new(data_color));
         self.data.insert(self.next_data_id, data);
         self.next_data_id += 1;
         leptos::logging::log!("appended mesh");
@@ -110,7 +124,7 @@ impl Viewer {
                 let quat = two_axis_valuator_fixed_up(
                     render.w(),
                     render.h(),
-                    2.0,
+                    4.0,
                     press_quat,
                     press_pos,
                     &pos,
