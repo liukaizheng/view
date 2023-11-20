@@ -1,4 +1,4 @@
-use cgmath::{Matrix4, Point3, Quaternion, Vector3};
+use cgmath::{Matrix4, Point3, Quaternion, SquareMatrix, Vector3};
 
 use super::{
     render::Renderer,
@@ -13,6 +13,7 @@ struct ViewBuffer {
     camera_bind_group: BindGroup,
     view_buffer: Buffer,
     proj_buffer: Buffer,
+    normal_mat_buffer: Buffer,
 }
 
 pub(crate) struct ViewCore {
@@ -101,6 +102,16 @@ impl ViewCore {
                                 },
                                 count: None,
                             },
+                            wgpu::BindGroupLayoutEntry {
+                                binding: 3,
+                                visibility: wgpu::ShaderStages::VERTEX,
+                                ty: wgpu::BindingType::Buffer {
+                                    ty: wgpu::BufferBindingType::Uniform,
+                                    has_dynamic_offset: false,
+                                    min_binding_size: None,
+                                },
+                                count: None,
+                            },
                         ],
                     });
 
@@ -136,6 +147,15 @@ impl ViewCore {
                         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
                     });
 
+            let normal_mat_buffer =
+                render
+                    .device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("normal matrix buffer"),
+                        contents: bytemuck::cast_slice(&[0.0f32; 16]),
+                        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                    });
+
             let camera_bind_group = render.device.create_bind_group(&wgpu::BindGroupDescriptor {
                 layout: &camera_bind_group_layout,
                 entries: &[
@@ -151,6 +171,10 @@ impl ViewCore {
                         binding: 2,
                         resource: light_position_buffer.as_entire_binding(),
                     },
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: normal_mat_buffer.as_entire_binding(),
+                    },
                 ],
                 label: None,
             });
@@ -159,6 +183,7 @@ impl ViewCore {
                 camera_bind_group,
                 view_buffer,
                 proj_buffer,
+                normal_mat_buffer,
             });
         }
         let mut has_dirty_data = false;
@@ -175,9 +200,9 @@ impl ViewCore {
                 data.dirty.remove(DirtyFlags::DIRTY_VERTEX);
             }
 
-            if data.dirty.contains(DirtyFlags::DIRTY_FACE) {
-                data.update_face_buffer(render);
-                data.dirty.remove(DirtyFlags::DIRTY_FACE);
+            if data.dirty.contains(DirtyFlags::DIRTY_MATERIAL) {
+                data.update_material(render);
+                data.dirty.remove(DirtyFlags::DIRTY_MATERIAL);
             }
         }
 
@@ -209,10 +234,14 @@ impl ViewCore {
             * Matrix4::from_scale(self.camera_base_zoom)
             * Matrix4::from(self.trackball_angle)
             * Matrix4::from_translation(self.camera_base_translation);
+        let normal_mat = view.invert().expect("failed to invert the view matrix");
+
         let w = render.w() as f32;
         let h = render.h() as f32;
         let proj = cgmath::perspective(self.camera_fov, w / h, self.camera_near, self.camera_far);
+
         let view_data: [[f32; 4]; 4] = view.into();
+        let normal_mat_data: [[f32; 4]; 4] = normal_mat.into();
         let proj_data: [[f32; 4]; 4] = proj.into();
         render.queue.write_buffer(
             &self.view_buffer.as_ref().unwrap().view_buffer,
@@ -223,6 +252,11 @@ impl ViewCore {
             &self.view_buffer.as_ref().unwrap().proj_buffer,
             0,
             bytemuck::cast_slice(&proj_data),
+        );
+        render.queue.write_buffer(
+            &self.view_buffer.as_ref().unwrap().normal_mat_buffer,
+            0,
+            bytemuck::cast_slice(&normal_mat_data),
         );
     }
 }

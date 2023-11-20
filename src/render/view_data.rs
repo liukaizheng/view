@@ -3,29 +3,6 @@ use super::{render::Renderer, BBox};
 use cgmath::Vector3;
 use wgpu::{util::DeviceExt, Buffer, CompareFunction, RenderPass, RenderPipeline, TextureFormat};
 
-#[inline]
-fn box_from_points(points: &[f32]) -> BBox {
-    let data = points.chunks(3).fold(
-        (f32::MAX, f32::MAX, f32::MAX, f32::MIN, f32::MIN, f32::MIN),
-        |(min_x, min_y, min_z, max_x, max_y, max_z), point| {
-            let x = point[0];
-            let y = point[1];
-            let z = point[2];
-            (
-                min_x.min(x),
-                min_y.min(y),
-                min_z.min(z),
-                max_x.max(x),
-                max_y.max(y),
-                max_z.max(z),
-            )
-        },
-    );
-    let min = Vector3::new(data.0, data.1, data.2);
-    let max = Vector3::new(data.3, data.4, data.5);
-    BBox { min, max }
-}
-
 bitflags::bitflags! {
     #[derive(Debug, Clone, Copy)]
     pub struct DirtyFlags: u32 {
@@ -33,7 +10,36 @@ bitflags::bitflags! {
         const DIRTY_VERTEX = 0b00000001;
         const DIRTY_EDGE = 0b00000010;
         const DIRTY_FACE = 0b00000100;
-        const DIRTY_ALL = Self::DIRTY_VERTEX.bits() | Self::DIRTY_EDGE.bits() | Self::DIRTY_FACE.bits();
+        const DIRTY_MATERIAL = 0b00001000;
+        const DIRTY_ALL = Self::DIRTY_VERTEX.bits() | Self::DIRTY_EDGE.bits() | Self::DIRTY_FACE.bits() | Self::DIRTY_MATERIAL.bits();
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+pub(crate) struct Vertex {
+    pub(crate) point: [f32; 3],
+    pub(crate) normal: [f32; 3],
+}
+
+impl Vertex {
+    fn desc() -> wgpu::VertexBufferLayout<'static> {
+        wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: &[
+                wgpu::VertexAttribute {
+                    offset: 0,
+                    shader_location: 0,
+                    format: wgpu::VertexFormat::Float32x3,
+                },
+                wgpu::VertexAttribute {
+                    offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
+                    shader_location: 1,
+                    format: wgpu::VertexFormat::Float32x3,
+                },
+            ],
+        }
     }
 }
 
@@ -41,11 +47,11 @@ bitflags::bitflags! {
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub(crate) struct Material {
     /// ambient color
-    pub ka: [f32; 4],
+    pub(crate) ka: [f32; 4],
     /// diffuse color
-    pub kd: [f32; 4],
+    pub(crate) kd: [f32; 4],
     /// specular color
-    pub ks: [f32; 4],
+    pub(crate) ks: [f32; 4],
 }
 
 impl Material {
@@ -68,11 +74,9 @@ pub(crate) struct MeshPipeline {
 
     material_buffer: Buffer,
     vertex_buffer: Buffer,
-    index_buffer: Buffer,
 }
 pub(crate) struct ViewData {
-    vertices: Vec<f32>,
-    triangles: Vec<u32>,
+    vertices: Vec<Vertex>,
     material: Material,
     pub(crate) dirty: DirtyFlags,
     pub(crate) bbox: BBox,
@@ -80,10 +84,9 @@ pub(crate) struct ViewData {
 }
 
 impl ViewData {
-    pub(crate) fn new(vertices: Vec<f32>, triangles: Vec<u32>, material: Material) -> Self {
+    pub(crate) fn new(vertices: Vec<Vertex>, material: Material) -> Self {
         Self {
             vertices,
-            triangles,
             material,
             dirty: DirtyFlags::DIRTY_ALL,
             bbox: BBox::default(),
@@ -155,15 +158,7 @@ impl ViewData {
                     vertex: wgpu::VertexState {
                         module: &shader,
                         entry_point: "vs_main",
-                        buffers: &[wgpu::VertexBufferLayout {
-                            array_stride: 3 * std::mem::size_of::<f32>() as u64,
-                            step_mode: wgpu::VertexStepMode::Vertex,
-                            attributes: &[wgpu::VertexAttribute {
-                                offset: 0,
-                                shader_location: 0,
-                                format: wgpu::VertexFormat::Float32x3,
-                            }],
-                        }],
+                        buffers: &[Vertex::desc()],
                     },
                     fragment: Some(wgpu::FragmentState {
                         module: &shader,
@@ -173,7 +168,6 @@ impl ViewData {
                     primitive: wgpu::PrimitiveState {
                         topology: wgpu::PrimitiveTopology::TriangleList,
                         front_face: wgpu::FrontFace::Ccw,
-                        cull_mode: Some(wgpu::Face::Back),
                         ..Default::default()
                     },
                     depth_stencil: Some(wgpu::DepthStencilState {
@@ -197,22 +191,11 @@ impl ViewData {
                 wgpu::BufferUsages::COPY_DST,
             });
 
-        let index_buffer = render
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("index_buffer"),
-                contents: bytemuck::cast_slice(&self.triangles),
-                usage: wgpu::BufferUsages::INDEX |
-                // allow it to be the destination for [`Queue::write_buffer`] operation
-                wgpu::BufferUsages::COPY_DST,
-            });
-
         self.pipeline = Some(MeshPipeline {
             material_bind_group,
             pipeline: render_pipeline,
             material_buffer,
             vertex_buffer,
-            index_buffer,
         });
     }
 
@@ -232,12 +215,12 @@ impl ViewData {
     }
 
     #[inline]
-    pub(crate) fn update_face_buffer(&mut self, render: &Renderer) {
+    pub(crate) fn update_material(&mut self, render: &Renderer) {
         render.queue.write_buffer(
-            &self.pipeline.as_ref().unwrap().index_buffer,
+            &self.pipeline.as_ref().unwrap().material_buffer,
             0,
-            bytemuck::cast_slice(&self.triangles),
-        );
+            bytemuck::bytes_of(&self.material),
+        )
     }
 
     pub(crate) fn render<'b, 'a: 'b>(&'a self, render_pass: &'b mut RenderPass<'a>) {
@@ -245,10 +228,29 @@ impl ViewData {
         render_pass.set_pipeline(&pipeline_data.pipeline);
         render_pass.set_bind_group(1, &pipeline_data.material_bind_group, &[]);
         render_pass.set_vertex_buffer(0, pipeline_data.vertex_buffer.slice(..));
-        render_pass.set_index_buffer(
-            pipeline_data.index_buffer.slice(..),
-            wgpu::IndexFormat::Uint32,
-        );
-        render_pass.draw_indexed(0..self.triangles.len() as u32, 0, 0..1);
+        render_pass.draw(0..self.vertices.len() as u32, 0..1);
     }
+}
+
+#[inline]
+fn box_from_points(vertices: &[Vertex]) -> BBox {
+    let data = vertices.iter().fold(
+        (f32::MAX, f32::MAX, f32::MAX, f32::MIN, f32::MIN, f32::MIN),
+        |(min_x, min_y, min_z, max_x, max_y, max_z), v| {
+            let x = v.point[0];
+            let y = v.point[1];
+            let z = v.point[2];
+            (
+                min_x.min(x),
+                min_y.min(y),
+                min_z.min(z),
+                max_x.max(x),
+                max_y.max(y),
+                max_z.max(z),
+            )
+        },
+    );
+    let min = Vector3::new(data.0, data.1, data.2);
+    let max = Vector3::new(data.3, data.4, data.5);
+    BBox { min, max }
 }

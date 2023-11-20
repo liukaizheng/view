@@ -1,10 +1,13 @@
 use anyhow::Result;
 use cgmath::{InnerSpace, Quaternion, Rad, Rotation3, Vector3};
+use rand::{
+    distributions::{Distribution, Uniform},
+    SeedableRng,
+};
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use winit::dpi::PhysicalPosition;
-use rand::{distributions::{Distribution, Uniform}, SeedableRng};
 
-use crate::render::view_data::Material;
+use crate::render::view_data::{Material, Vertex};
 
 use super::{render::Renderer, view_core::ViewCore, view_data::ViewData};
 pub enum MousePressed {
@@ -35,9 +38,33 @@ impl Viewer {
         }
     }
 
-    pub fn append_mesh(&mut self, points: &[f64], triangles: &[usize], color: Option<Vector3<f32>>) {
-        let points = Vec::from_iter(points.iter().map(|&x| x as f32));
-        let triangles = Vec::from_iter(triangles.iter().map(|&i| i as u32));
+    pub fn append_mesh(
+        &mut self,
+        points: &[f64],
+        triangles: &[usize],
+        color: Option<Vector3<f32>>,
+    ) {
+        let point = |idx| {
+            let start = idx * 3;
+            &points[start..(start + 3)]
+        };
+        let vertices = Vec::from_iter(
+            triangles
+                .chunks(3)
+                .map(|f| {
+                    let verts = [point(f[0]), point(f[1]), point(f[2])]
+                        .map(|p| Vector3::<f32>::new(p[0] as f32, p[1] as f32, p[2] as f32));
+                    let vab = verts[1] - verts[0];
+                    let vac = verts[2] - verts[0];
+                    let normal = vab.cross(vac).normalize();
+                    verts.map(|v| Vertex {
+                        point: v.into(),
+                        normal: normal.into(),
+                    })
+                })
+                .flatten(),
+        );
+
         let data_color = if let Some(color) = color {
             color
         } else {
@@ -49,7 +76,7 @@ impl Viewer {
                 between.sample(&mut rng),
             )
         };
-        let data = ViewData::new(points, triangles, Material::new(data_color));
+        let data = ViewData::new(vertices, Material::new(data_color));
         self.data.insert(self.next_data_id, data);
         self.next_data_id += 1;
         leptos::logging::log!("appended mesh");
