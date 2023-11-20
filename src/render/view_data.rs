@@ -37,13 +37,15 @@ bitflags::bitflags! {
     }
 }
 
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub(crate) struct Material {
     /// ambient color
-    pub ka: Vector3<f32>,
+    pub ka: [f32; 4],
     /// diffuse color
-    pub kd: Vector3<f32>,
+    pub kd: [f32; 4],
     /// specular color
-    pub ks: Vector3<f32>,
+    pub ks: [f32; 4],
 }
 
 impl Material {
@@ -53,15 +55,18 @@ impl Material {
         const GREY: Vector3<f32> = Vector3::new(0.3, 0.3, 0.3);
         let ks = GREY + 0.1 * (kd - GREY);
         Self {
-            ka,
-            kd,
-            ks,
+            ka: [ka.x, ka.y, ka.z, 1.0],
+            kd: [kd.x, kd.y, kd.z, 1.0],
+            ks: [ks.x, ks.y, ks.z, 1.0],
         }
     }
 }
 
 pub(crate) struct MeshPipeline {
+    material_bind_group: wgpu::BindGroup,
     pipeline: RenderPipeline,
+
+    material_buffer: Buffer,
     vertex_buffer: Buffer,
     index_buffer: Buffer,
 }
@@ -91,6 +96,40 @@ impl ViewData {
         render: &Renderer,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
     ) {
+        let material_bind_group_layout =
+            render
+                .device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("camera_bind_group_layout"),
+                    entries: &[wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    }],
+                });
+
+        let material_buffer = render
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("vertex_buffer"),
+                contents: bytemuck::bytes_of(&self.material),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            });
+
+        let material_bind_group = render.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &material_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: material_buffer.as_entire_binding(),
+            }],
+            label: None,
+        });
+
         let shader = render
             .device
             .create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -103,7 +142,7 @@ impl ViewData {
                 .device
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("render_pipeline_layout"),
-                    bind_group_layouts: &[camera_bind_group_layout],
+                    bind_group_layouts: &[camera_bind_group_layout, &material_bind_group_layout],
                     push_constant_ranges: &[],
                 });
 
@@ -169,7 +208,9 @@ impl ViewData {
             });
 
         self.pipeline = Some(MeshPipeline {
+            material_bind_group,
             pipeline: render_pipeline,
+            material_buffer,
             vertex_buffer,
             index_buffer,
         });
@@ -202,6 +243,7 @@ impl ViewData {
     pub(crate) fn render<'b, 'a: 'b>(&'a self, render_pass: &'b mut RenderPass<'a>) {
         let pipeline_data = self.pipeline.as_ref().unwrap();
         render_pass.set_pipeline(&pipeline_data.pipeline);
+        render_pass.set_bind_group(1, &pipeline_data.material_bind_group, &[]);
         render_pass.set_vertex_buffer(0, pipeline_data.vertex_buffer.slice(..));
         render_pass.set_index_buffer(
             pipeline_data.index_buffer.slice(..),

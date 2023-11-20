@@ -13,7 +13,12 @@ use winit::event::WindowEvent;
 use winit::platform::web::WindowBuilderExtWebSys;
 use winit::{event, event_loop};
 
+extern crate console_error_panic_hook;
+use std::panic;
+
 fn main() -> Result<()> {
+    
+    panic::set_hook(Box::new(console_error_panic_hook::hook));
     let canvas: NodeRef<Canvas> = create_node_ref();
     let render: Rc<RefCell<Option<Renderer>>> = Default::default();
     let viewer = Rc::new(RefCell::new(viewer::Viewer::new(render.clone())));
@@ -30,7 +35,7 @@ fn main() -> Result<()> {
                         render.borrow_mut().replace(r);
                     }
                     Err(e) => {
-                        logging::error!("{:?}", e);
+                        logging::error!("create viewer failed by {:?}", e);
                     }
                 }
             });
