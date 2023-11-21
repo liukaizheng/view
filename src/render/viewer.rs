@@ -161,6 +161,14 @@ impl Viewer {
             _ => {}
         }
     }
+
+    pub fn mouse_scroll(&mut self, delta_y: f64) {
+        if delta_y != 0.0 {
+            const MIN_ZOOM: f32 = 0.1;
+            let mult = 1.0 + if delta_y > 0.0 { 1.0 } else { -1.0 } * 0.05;
+            self.view_core.camera_zoom = MIN_ZOOM.max(self.view_core.camera_zoom * mult);
+        }
+    }
 }
 
 fn two_axis_valuator_fixed_up(

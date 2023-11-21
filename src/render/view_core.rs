@@ -20,6 +20,7 @@ pub(crate) struct ViewCore {
     light_position: Vector3<f32>,
 
     camera_base_zoom: f32,
+    pub(crate) camera_zoom: f32,
     camera_base_translation: Vector3<f32>,
 
     camera_near: f32,
@@ -40,6 +41,7 @@ impl Default for ViewCore {
         Self {
             light_position: Vector3::new(0.0, 0.3, 0.0),
             camera_base_zoom: 1.0,
+            camera_zoom: 1.0,
             camera_base_translation: Vector3::new(0.0, 0.0, 0.0),
 
             camera_near: 1.0,
@@ -231,10 +233,11 @@ impl ViewCore {
 
     fn update_matrix(&self, render: &Renderer) {
         let view = Matrix4::look_at_rh(self.camera_eye, self.camera_center, self.camera_up)
-            * Matrix4::from_scale(self.camera_base_zoom)
+            * Matrix4::from_scale(self.camera_base_zoom * self.camera_zoom)
             * Matrix4::from(self.trackball_angle)
             * Matrix4::from_translation(self.camera_base_translation);
-        let normal_mat = view.invert().expect("failed to invert the view matrix");
+        let mut normal_mat = view.invert().expect("failed to invert the view matrix");
+        normal_mat.transpose_self();
 
         let w = render.w() as f32;
         let h = render.h() as f32;

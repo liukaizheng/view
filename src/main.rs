@@ -17,7 +17,6 @@ extern crate console_error_panic_hook;
 use std::panic;
 
 fn main() -> Result<()> {
-    
     panic::set_hook(Box::new(console_error_panic_hook::hook));
     let canvas: NodeRef<Canvas> = create_node_ref();
     let render: Rc<RefCell<Option<Renderer>>> = Default::default();
@@ -58,32 +57,33 @@ fn main() -> Result<()> {
                 leptos::logging::log!("{:?}", event);
             }
 
-            WindowEvent::CursorMoved { device_id: _, position } => {
+            WindowEvent::CursorMoved { position, .. } => {
                 viewer.borrow_mut().mouse_move(position);
             }
 
-            WindowEvent::MouseInput { device_id: _, state, button } => {
-                match state  {
-                    event::ElementState::Pressed => {
-                        match button {
-                            event::MouseButton::Left => {
-                                viewer.borrow_mut().pressed_state = MousePressed::Left(None);
-                            }
-                            _ => {}
-                        }
-
+            WindowEvent::MouseInput { state, button, .. } => match state {
+                event::ElementState::Pressed => match button {
+                    event::MouseButton::Left => {
+                        viewer.borrow_mut().pressed_state = MousePressed::Left(None);
                     }
-                    event::ElementState::Released => {
-                        viewer.borrow_mut().pressed_state = MousePressed::None;
-                    }
+                    _ => {}
+                },
+                event::ElementState::Released => {
+                    viewer.borrow_mut().pressed_state = MousePressed::None;
                 }
-            }
+            },
+
+            WindowEvent::MouseWheel { delta, .. } => match delta {
+                event::MouseScrollDelta::PixelDelta(size) => {
+                    viewer.borrow_mut().mouse_scroll(size.y);
+                }
+                _ => {}
+            },
 
             WindowEvent::RedrawRequested => {
                 if let Err(msg) = viewer.borrow_mut().render() {
                     logging::error!("faild to render because {:?}", msg);
                 } else {
-                    logging::log!("success");
                     window.request_redraw();
                 }
             }
