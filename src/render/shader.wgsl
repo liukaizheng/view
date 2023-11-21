@@ -53,18 +53,17 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // ambient intesensity
     let ia = material.ka.xyz;
 
-    let eye_to_light = normalize(light_pos.xyz);
+    let eye_to_light = normalize(light_pos.xyz - in.pos_in_eye);
     let dot_prod = max(dot(eye_to_light, in.normal), 0.0);
     // diffuse intensity
     let id = material.kd.xyz * dot_prod;
    
     let reflect_in_eye = reflect(-eye_to_light, in.normal);
     let surface_to_viewer_eye = normalize(-in.pos_in_eye);
-    let dot_prod_specular = max(dot(reflect_in_eye, surface_to_viewer_eye), 1.0);
+    let dot_prod_specular = max(dot(reflect_in_eye, surface_to_viewer_eye), 0.0);
     let specular_factor = pow(dot_prod_specular, 35.0);
     // secular intensity
     let is = material.ks.xyz * specular_factor;
-    return vec4f(ia + is + id, 1.0);
-
-
+    
+    return vec4f(ia + id + is, 1.0);
 }

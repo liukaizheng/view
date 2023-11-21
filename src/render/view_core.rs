@@ -215,6 +215,7 @@ impl ViewCore {
             }
             let center = (bbox.min + bbox.max) / 2.0;
             self.camera_base_translation = -center;
+            self.camera_base_zoom = 1.0 / bbox.max_len();
         }
 
         if has_dirty_data || update_matrix {

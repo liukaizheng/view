@@ -1,9 +1,9 @@
 use cgmath::Vector3;
 
 pub mod render;
+pub mod view_core;
 mod view_data;
 pub mod viewer;
-pub mod view_core;
 
 pub(crate) struct BBox {
     min: Vector3<f32>,
@@ -34,5 +34,11 @@ impl BBox {
     fn merge_box(&mut self, other: &BBox) {
         self.merge(&other.min);
         self.merge(&other.max);
+    }
+
+    #[inline]
+    fn max_len(&self) -> f32 {
+        let d = self.max - self.min;
+        d.x.max(d.y).max(d.z)
     }
 }
