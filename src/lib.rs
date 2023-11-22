@@ -79,7 +79,7 @@ fn write_obj(points: &[f64], triangles: &[usize]) -> String {
 }
 
 #[component]
-pub fn Model(model: Model) -> impl IntoView {
+pub fn Model(model: Model, viewer: Rc<RefCell<Viewer>>) -> impl IntoView {
     let write_to_local = move |_| {
         let (points, triangles) = model.data.get();
         let txt = write_obj(&points, &triangles);
@@ -100,15 +100,35 @@ pub fn Model(model: Model) -> impl IntoView {
 
     let set_models = use_context::<WriteSignal<Models>>().unwrap();
     let destroy = move |_| {
-        set_models.update(|models| models.remove(model.id));
+        set_models.update(|models| {
+            let id = model.id;
+            models.remove(model.id);
+            viewer.borrow_mut().remove_data(id);
+        });
     };
+    let (show, set_show) = create_signal(true);
+    let toggle_show = move |_| {
+        set_show.update(|show| *show = !*show);
+    };
+    const SHOW_CLASS_ATTR: &str = "w-full";
+    const HIDE_CLASS_ATTR: &str = "w-full text-gray-400";
     view! {
         <li class = "group/li w-full p-2 hover:bg-emerald-100">
             <div class = "flex flex-1 items-center justify-center">
-                <label class = "w-full">
+                <label class = move || if show() { SHOW_CLASS_ATTR} else {HIDE_CLASS_ATTR}>
                     {move || model.name.get() }
                 </label>
                 <div class = "flex">
+                <button on:click = toggle_show class = "group/button w-6 h-6 hover:bg-emerald-200 rounded-full items-center justify-center hidden group-hover/li:flex mr-1">
+                    { move || {
+                        if show() {
+                            view! { <svg class= "w-4 h-4 stroke-2 stroke-emerald-900" aria-hidden="true" fill="none" viewBox="0 0 20 14"> <g> <path d="M10 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/> <path d="M10 13c4.97 0 9-2.686 9-6s-4.03-6-9-6-9 2.686-9 6 4.03 6 9 6Z"/> </g> </svg>}
+                        } else {
+                            view! {<svg class= "w-4 h-4 stroke-2 stroke-emerald-900" aria-hidden="true" fill="none" viewBox="0 0 20 18"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M1.933 10.909A4.357 4.357 0 0 1 1 9c0-1 4-6 9-6m7.6 3.8A5.068 5.068 0 0 1 19 9c0 1-3 6-9 6-.314 0-.62-.014-.918-.04M2 17 18 1m-5 8a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/>
+  </svg>}
+                        }
+                    }}
+                </button>
                 <button on:click = write_to_local class = "group/button w-6 h-6 hover:bg-emerald-200 rounded-full items-center justify-center hidden group-hover/li:flex mr-1">
                     <svg viewBox="0 0 24 24" class = "w-4 h-4 fill-emerald-900"><path d="M18.948 11.112C18.511 7.67 15.563 5 12.004 5c-2.756 0-5.15 1.611-6.243 4.15-2.148.642-3.757 2.67-3.757 4.85 0 2.757 2.243 5 5 5h1v-2h-1c-1.654 0-3-1.346-3-3 0-1.404 1.199-2.757 2.673-3.016l.581-.102.192-.558C8.153 8.273 9.898 7 12.004 7c2.757 0 5 2.243 5 5v1h1c1.103 0 2 .897 2 2s-.897 2-2 2h-2v2h2c2.206 0 4-1.794 4-4a4.008 4.008 0 0 0-3.056-3.888z"></path><path d="M13.004 14v-4h-2v4h-3l4 5 4-5z"></path></svg>
                 </button>
@@ -180,6 +200,7 @@ pub fn ModelList(
     }
 
     let file_input = create_node_ref::<html::Input>();
+    let viewer_clone = viewer.clone();
     let on_change = move |_| {
         if let Some(files) = file_input.get().unwrap().files() {
             for i in 0..files.length() {
@@ -189,10 +210,10 @@ pub fn ModelList(
                         .strip_suffix(".obj")
                         .and_then(|s| Some(s.to_owned()))
                     {
-                        let viewer = viewer.clone();
+                        let viewer_clone = viewer_clone.clone();
                         spawn_local(async move {
                             if let Ok(raw_model) = read_obj_from_file(file).await {
-                                let id = viewer.borrow_mut().append_mesh(
+                                let id = viewer_clone.borrow_mut().append_mesh(
                                     &raw_model.0,
                                     &raw_model.1,
                                     None,
@@ -219,7 +240,7 @@ pub fn ModelList(
                         <For
                             each = move || models().0.clone()
                             key = |model| model.id
-                            children = move |model: Model| view!{ <Model model/>}
+                            children = move |model: Model| view!{ <Model model viewer = viewer.clone()/>}
                         />
                     </ul>
                 </div>

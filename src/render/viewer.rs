@@ -170,6 +170,10 @@ impl Viewer {
             self.view_core.camera_zoom = MIN_ZOOM.max(self.view_core.camera_zoom * mult);
         }
     }
+
+    pub fn remove_data(&mut self, id: u32) {
+        self.data.remove(&id);
+    }
 }
 
 fn two_axis_valuator_fixed_up(
