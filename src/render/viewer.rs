@@ -43,7 +43,7 @@ impl Viewer {
         points: &[f64],
         triangles: &[usize],
         color: Option<Vector3<f32>>,
-    ) {
+    ) -> u32 {
         let point = |idx| {
             let start = idx * 3;
             &points[start..(start + 3)]
@@ -77,9 +77,10 @@ impl Viewer {
             )
         };
         let data = ViewData::new(vertices, Material::new(data_color));
-        self.data.insert(self.next_data_id, data);
+        let id = self.next_data_id;
         self.next_data_id += 1;
-        leptos::logging::log!("appended mesh");
+        self.data.insert(id, data);
+        id
     }
 
     pub fn render(&mut self) -> Result<()> {

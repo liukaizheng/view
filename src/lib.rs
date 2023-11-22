@@ -13,15 +13,15 @@ type RawModel = (Vec<f64>, Vec<usize>);
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Model {
-    id: uuid::Uuid,
+    id: u32,
     name: RwSignal<String>,
     data: RwSignal<RawModel>,
 }
 
 impl Model {
-    fn new(name: String, model: RawModel) -> Self {
+    fn new(name: String, model: RawModel, id: u32) -> Self {
         Self {
-            id: uuid::Uuid::new_v4(),
+            id,
             name: create_rw_signal(name),
             data: create_rw_signal(model),
         }
@@ -40,7 +40,7 @@ impl Models {
         self.0.push(model);
     }
 
-    fn remove(&mut self, id: uuid::Uuid) {
+    fn remove(&mut self, id: u32) {
         self.0.retain(|m| m.id != id);
     }
 }
@@ -161,13 +161,23 @@ pub fn ModelList(
         }
     });
 
-    window_event_listener_untyped("ce_update_list", move |_| {
-        if let Some(raw_model) = fixed_model() {
-            set_models.update(|models| {
-                models.add(Model::new(format!("model{}", models.0.len()), raw_model));
-            });
-        }
-    });
+    {
+        let viewer = viewer.clone();
+        window_event_listener_untyped("ce_update_list", move |_| {
+            if let Some(raw_model) = fixed_model() {
+                let id = viewer
+                    .borrow_mut()
+                    .append_mesh(&raw_model.0, &raw_model.1, None);
+                set_models.update(|models| {
+                    models.add(Model::new(
+                        format!("model{}", models.0.len()),
+                        raw_model,
+                        id,
+                    ));
+                });
+            }
+        });
+    }
 
     let file_input = create_node_ref::<html::Input>();
     let on_change = move |_| {
@@ -182,9 +192,13 @@ pub fn ModelList(
                         let viewer = viewer.clone();
                         spawn_local(async move {
                             if let Ok(raw_model) = read_obj_from_file(file).await {
-                                viewer.borrow_mut().append_mesh(&raw_model.0, &raw_model.1, None);
+                                let id = viewer.borrow_mut().append_mesh(
+                                    &raw_model.0,
+                                    &raw_model.1,
+                                    None,
+                                );
                                 set_models.update(|models| {
-                                    models.add(Model::new(name, raw_model));
+                                    models.add(Model::new(name, raw_model, id));
                                 });
                             }
                         });
@@ -211,7 +225,7 @@ pub fn ModelList(
                 </div>
             <button
                 class = "w-20 h-fit p-1 mt-3 rounded-full border border-emerald-600 bg-emerald-100 hover:bg-emerald-200"
-                class:hidden = { move || models.with(|m| m.0.is_empty())}
+                class:hidden = { move || models.with(|m| m.0.is_empty()) }
                 disabled = fix_pending
                 on:click = move |_| {
                     fix_action.dispatch(());
