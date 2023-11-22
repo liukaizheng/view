@@ -65,6 +65,7 @@ impl ViewCore {
         render: &'a Renderer,
         render_pass: &'b mut wgpu::RenderPass<'a>,
         data_map: &'a mut std::collections::HashMap<u32, ViewData>,
+        update_box: bool,
         update_matrix: bool,
     ) {
         if self.view_buffer.is_none() {
@@ -190,6 +191,10 @@ impl ViewCore {
         }
         let mut has_dirty_data = false;
         for data in data_map.values_mut() {
+            if !data.visible {
+                continue;
+            }
+
             if data.pipeline.is_none() {
                 data.init_pipline(
                     render,
@@ -208,7 +213,7 @@ impl ViewCore {
             }
         }
 
-        if has_dirty_data {
+        if update_box || has_dirty_data {
             let mut bbox = BBox::default();
             for data in data_map.values() {
                 bbox.merge_box(&data.bbox);
@@ -228,7 +233,9 @@ impl ViewCore {
             &[],
         );
         for data in data_map.values() {
-            data.render(render_pass);
+            if data.visible {
+                data.render(render_pass);
+            }
         }
     }
 

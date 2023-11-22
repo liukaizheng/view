@@ -81,6 +81,7 @@ pub(crate) struct ViewData {
     pub(crate) dirty: DirtyFlags,
     pub(crate) bbox: BBox,
     pub(crate) pipeline: Option<MeshPipeline>,
+    pub(crate) visible: bool,
 }
 
 impl ViewData {
@@ -91,6 +92,7 @@ impl ViewData {
             dirty: DirtyFlags::DIRTY_ALL,
             bbox: BBox::default(),
             pipeline: None,
+            visible: true,
         }
     }
 
@@ -197,6 +199,11 @@ impl ViewData {
             material_buffer,
             vertex_buffer,
         });
+    }
+
+    #[inline]
+    pub(crate) fn set_visible(&mut self, visible: bool) {
+        self.visible = visible;
     }
 
     #[inline]

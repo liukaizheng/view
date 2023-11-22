@@ -24,6 +24,7 @@ pub struct Viewer {
 
     current_pos: PhysicalPosition<f64>,
     pub pressed_state: MousePressed,
+    data_dirty: bool,
 }
 
 impl Viewer {
@@ -35,6 +36,7 @@ impl Viewer {
             view_core: ViewCore::default(),
             current_pos: PhysicalPosition { x: 0.0, y: 0.0 },
             pressed_state: MousePressed::None,
+            data_dirty: false,
         }
     }
 
@@ -115,8 +117,14 @@ impl Viewer {
                     occlusion_query_set: None,
                 });
                 render_pass.set_viewport(0.0, 0.0, render.w() as f32, render.h() as f32, 0.0, 1.0);
-                self.view_core
-                    .render(render, &mut render_pass, &mut self.data, true);
+                self.view_core.render(
+                    render,
+                    &mut render_pass,
+                    &mut self.data,
+                    self.data_dirty,
+                    true,
+                );
+                self.data_dirty = false;
             }
             render.queue.submit(std::iter::once(encoder.finish()));
             texture.present();
@@ -173,6 +181,13 @@ impl Viewer {
 
     pub fn remove_data(&mut self, id: u32) {
         self.data.remove(&id);
+        self.data_dirty = true;
+    }
+
+    pub fn set_visible(&mut self, id: u32, visible: bool) {
+        if let Some(data) = self.data.get_mut(&id) {
+            data.set_visible(visible);
+        }
     }
 }
 

@@ -16,6 +16,7 @@ pub struct Model {
     id: u32,
     name: RwSignal<String>,
     data: RwSignal<RawModel>,
+    show: RwSignal<bool>,
 }
 
 impl Model {
@@ -24,6 +25,7 @@ impl Model {
             id,
             name: create_rw_signal(name),
             data: create_rw_signal(model),
+            show: create_rw_signal(true),
         }
     }
 }
@@ -42,6 +44,15 @@ impl Models {
 
     fn remove(&mut self, id: u32) {
         self.0.retain(|m| m.id != id);
+    }
+
+    fn hide(&mut self) {
+        for m in &mut self.0 {
+            let show = m.show.clone();
+            if show.get() {
+                show.update(|s| *s = false);
+            }
+        }
     }
 }
 
@@ -80,6 +91,13 @@ fn write_obj(points: &[f64], triangles: &[usize]) -> String {
 
 #[component]
 pub fn Model(model: Model, viewer: Rc<RefCell<Viewer>>) -> impl IntoView {
+    {
+        let viewer = viewer.clone();
+        create_effect(move |_| {
+            viewer.borrow_mut().set_visible(model.id, model.show.get());
+        });
+    }
+
     let write_to_local = move |_| {
         let (points, triangles) = model.data.get();
         let txt = write_obj(&points, &triangles);
@@ -106,39 +124,38 @@ pub fn Model(model: Model, viewer: Rc<RefCell<Viewer>>) -> impl IntoView {
             viewer.borrow_mut().remove_data(id);
         });
     };
-    let (show, set_show) = create_signal(true);
     let toggle_show = move |_| {
-        set_show.update(|show| *show = !*show);
+        model.show.update(|show| *show = !*show);
     };
     const SHOW_CLASS_ATTR: &str = "w-full";
     const HIDE_CLASS_ATTR: &str = "w-full text-gray-400";
     view! {
-        <li class = "group/li w-full p-2 hover:bg-emerald-100">
-            <div class = "flex flex-1 items-center justify-center">
-                <label class = move || if show() { SHOW_CLASS_ATTR} else {HIDE_CLASS_ATTR}>
-                    {move || model.name.get() }
-                </label>
-                <div class = "flex">
-                <button on:click = toggle_show class = "group/button w-6 h-6 hover:bg-emerald-200 rounded-full items-center justify-center hidden group-hover/li:flex mr-1">
-                    { move || {
-                        if show() {
-                            view! { <svg class= "w-4 h-4 stroke-2 stroke-emerald-900" aria-hidden="true" fill="none" viewBox="0 0 20 14"> <g> <path d="M10 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/> <path d="M10 13c4.97 0 9-2.686 9-6s-4.03-6-9-6-9 2.686-9 6 4.03 6 9 6Z"/> </g> </svg>}
-                        } else {
-                            view! {<svg class= "w-4 h-4 stroke-2 stroke-emerald-900" aria-hidden="true" fill="none" viewBox="0 0 20 18"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M1.933 10.909A4.357 4.357 0 0 1 1 9c0-1 4-6 9-6m7.6 3.8A5.068 5.068 0 0 1 19 9c0 1-3 6-9 6-.314 0-.62-.014-.918-.04M2 17 18 1m-5 8a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/>
-  </svg>}
-                        }
-                    }}
-                </button>
-                <button on:click = write_to_local class = "group/button w-6 h-6 hover:bg-emerald-200 rounded-full items-center justify-center hidden group-hover/li:flex mr-1">
-                    <svg viewBox="0 0 24 24" class = "w-4 h-4 fill-emerald-900"><path d="M18.948 11.112C18.511 7.67 15.563 5 12.004 5c-2.756 0-5.15 1.611-6.243 4.15-2.148.642-3.757 2.67-3.757 4.85 0 2.757 2.243 5 5 5h1v-2h-1c-1.654 0-3-1.346-3-3 0-1.404 1.199-2.757 2.673-3.016l.581-.102.192-.558C8.153 8.273 9.898 7 12.004 7c2.757 0 5 2.243 5 5v1h1c1.103 0 2 .897 2 2s-.897 2-2 2h-2v2h2c2.206 0 4-1.794 4-4a4.008 4.008 0 0 0-3.056-3.888z"></path><path d="M13.004 14v-4h-2v4h-3l4 5 4-5z"></path></svg>
-                </button>
-                <button on:click = destroy class = "group/button w-6 h-6 hover:bg-emerald-200 rounded-full items-center justify-center hidden group-hover/li:flex">
-                    <svg viewBox="0 0 24 24" stroke-linecap="round" class = "w-4 h-4 stroke-2 stroke-emerald-900"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                </button>
-                </div>
-            </div>
-        </li>
-    }
+          <li class = "group/li w-full p-2 hover:bg-emerald-100">
+              <div class = "flex flex-1 items-center justify-center">
+                  <label class = move || if model.show.get() { SHOW_CLASS_ATTR} else {HIDE_CLASS_ATTR}>
+                      {move || model.name.get() }
+                  </label>
+                  <div class = "flex">
+                  <button on:click = toggle_show class = "group/button w-6 h-6 hover:bg-emerald-200 rounded-full items-center justify-center hidden group-hover/li:flex mr-1">
+                      { move || {
+                          if model.show.get() {
+                              view! { <svg class= "w-4 h-4 stroke-2 stroke-emerald-900" aria-hidden="true" fill="none" viewBox="0 0 20 14"> <g> <path d="M10 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/> <path d="M10 13c4.97 0 9-2.686 9-6s-4.03-6-9-6-9 2.686-9 6 4.03 6 9 6Z"/> </g> </svg>}
+                          } else {
+                              view! {<svg class= "w-4 h-4 stroke-2 stroke-emerald-900" aria-hidden="true" fill="none" viewBox="0 0 20 18"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M1.933 10.909A4.357 4.357 0 0 1 1 9c0-1 4-6 9-6m7.6 3.8A5.068 5.068 0 0 1 19 9c0 1-3 6-9 6-.314 0-.62-.014-.918-.04M2 17 18 1m-5 8a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/>
+    </svg>}
+                          }
+                      }}
+                  </button>
+                  <button on:click = write_to_local class = "group/button w-6 h-6 hover:bg-emerald-200 rounded-full items-center justify-center hidden group-hover/li:flex mr-1">
+                      <svg viewBox="0 0 24 24" class = "w-4 h-4 fill-emerald-900"><path d="M18.948 11.112C18.511 7.67 15.563 5 12.004 5c-2.756 0-5.15 1.611-6.243 4.15-2.148.642-3.757 2.67-3.757 4.85 0 2.757 2.243 5 5 5h1v-2h-1c-1.654 0-3-1.346-3-3 0-1.404 1.199-2.757 2.673-3.016l.581-.102.192-.558C8.153 8.273 9.898 7 12.004 7c2.757 0 5 2.243 5 5v1h1c1.103 0 2 .897 2 2s-.897 2-2 2h-2v2h2c2.206 0 4-1.794 4-4a4.008 4.008 0 0 0-3.056-3.888z"></path><path d="M13.004 14v-4h-2v4h-3l4 5 4-5z"></path></svg>
+                  </button>
+                  <button on:click = destroy class = "group/button w-6 h-6 hover:bg-emerald-200 rounded-full items-center justify-center hidden group-hover/li:flex">
+                      <svg viewBox="0 0 24 24" stroke-linecap="round" class = "w-4 h-4 stroke-2 stroke-emerald-900"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                  </button>
+                  </div>
+              </div>
+          </li>
+      }
 }
 
 #[component]
@@ -152,11 +169,16 @@ pub fn ModelList(
         let mut triangles = Vec::<usize>::new();
         let mut tri_in_shells = Vec::new();
         let mut n_points = 0;
-        for (i, model) in models().0.iter().enumerate() {
+        let mut idx = 0;
+        for model in models().0.iter() {
+            if !model.show.get() {
+                continue;
+            }
             let data = &model.data.get();
             points.extend(data.0.iter());
             triangles.extend(data.1.iter().map(|idx| idx + n_points));
-            tri_in_shells.resize(tri_in_shells.len() + data.1.len() / 3, i);
+            tri_in_shells.resize(tri_in_shells.len() + data.1.len() / 3, idx);
+            idx += 1;
             n_points = points.len() / 3;
         }
         async move {
