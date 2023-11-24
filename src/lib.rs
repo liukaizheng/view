@@ -3,7 +3,6 @@ use std::{cell::RefCell, collections::HashMap, io::BufReader, rc::Rc};
 use js_sys::Uint8Array;
 use leptos::*;
 use tobj::Material;
-use web_sys::CustomEvent;
 
 use crate::render::viewer::Viewer;
 
@@ -164,49 +163,38 @@ pub fn ModelList(
     set_models: WriteSignal<Models>,
     viewer: Rc<RefCell<Viewer>>,
 ) -> impl IntoView {
-    let fix_action = create_action(move |_: &()| {
-        let mut points = Vec::<f64>::new();
-        let mut triangles = Vec::<usize>::new();
-        let mut tri_in_shells = Vec::new();
-        let mut n_points = 0;
-        let mut idx = 0;
-        for model in models().0.iter() {
-            if !model.show.get() {
-                continue;
-            }
-            let data = &model.data.get();
-            points.extend(data.0.iter());
-            triangles.extend(data.1.iter().map(|idx| idx + n_points));
-            tri_in_shells.resize(tri_in_shells.len() + data.1.len() / 3, idx);
-            idx += 1;
-            n_points = points.len() / 3;
-        }
-        async move {
-            gloo_timers::future::TimeoutFuture::new(0).await;
-            gpf::polygonlization::make_mesh_for_triangles(&points, &triangles, &tri_in_shells)
-        }
-    });
-
-    let fix_pending = fix_action.pending();
-    let fixed_model = fix_action.value();
-
-    create_effect(move |_| {
-        if fixed_model().is_some() {
-            if let Ok(event) = CustomEvent::new("ce_update_list") {
-                if let Err(err) = window().dispatch_event(&event) {
-                    leptos::logging::warn!(
-                        "failed to dispatch 'update list' event with error {:?}",
-                        err
-                    );
-                }
-            }
-        }
-    });
-
-    {
+    let (fix, set_fix) = create_signal(false);
+    let fix_model = {
         let viewer = viewer.clone();
-        window_event_listener_untyped("ce_update_list", move |_| {
-            if let Some(raw_model) = fixed_model() {
+        move |_| {
+            let viewer = viewer.clone();
+            leptos::spawn_local(async move {
+                set_fix.set(true);
+                gloo_timers::future::TimeoutFuture::new(10).await;
+                let mut points = Vec::<f64>::new();
+                let mut triangles = Vec::<usize>::new();
+                let mut tri_in_shells = Vec::new();
+                let mut n_points = 0;
+                let mut idx = 0;
+                for model in models().0.iter() {
+                    if !model.show.get() {
+                        continue;
+                    }
+                    let data = &model.data.get();
+                    points.extend(data.0.iter());
+                    triangles.extend(data.1.iter().map(|idx| idx + n_points));
+                    tri_in_shells.resize(tri_in_shells.len() + data.1.len() / 3, idx);
+                    idx += 1;
+                    n_points = points.len() / 3;
+                }
+                let raw_model = gpf::polygonlization::make_mesh_for_triangles(
+                    &points,
+                    &triangles,
+                    &tri_in_shells,
+                );
+                set_models.update(|models| {
+                    models.hide();
+                });
                 let id = viewer
                     .borrow_mut()
                     .append_mesh(&raw_model.0, &raw_model.1, None);
@@ -217,9 +205,10 @@ pub fn ModelList(
                         id,
                     ));
                 });
-            }
-        });
-    }
+                set_fix(false);
+            });
+        }
+    };
 
     let file_input = create_node_ref::<html::Input>();
     let viewer_clone = viewer.clone();
@@ -269,13 +258,11 @@ pub fn ModelList(
             <button
                 class = "w-20 h-fit p-1 mt-3 rounded-full border border-emerald-600 bg-emerald-100 hover:bg-emerald-200"
                 class:hidden = { move || models.with(|m| m.0.is_empty()) }
-                disabled = fix_pending
-                on:click = move |_| {
-                    fix_action.dispatch(());
-                }
+                disabled = { fix }
+                on:click = fix_model
             >
                 {move || {
-                    fix_pending.with(|fix| {
+                    fix.with(|fix| {
                         if *fix { "Fixing" } else { "Fix " }
                     })
                 }}
