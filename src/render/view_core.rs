@@ -214,13 +214,15 @@ impl ViewCore {
         }
 
         if update_box || has_dirty_data {
-            let mut bbox = BBox::default();
-            for data in data_map.values() {
-                bbox.merge_box(&data.bbox);
+            if !data_map.is_empty() {
+                let mut bbox = BBox::default();
+                for data in data_map.values() {
+                    bbox.merge_box(&data.bbox);
+                }
+                let center = (bbox.min + bbox.max) / 2.0;
+                self.camera_base_translation = -center;
+                self.camera_base_zoom = 1.0 / bbox.max_len();
             }
-            let center = (bbox.min + bbox.max) / 2.0;
-            self.camera_base_translation = -center;
-            self.camera_base_zoom = 1.0 / bbox.max_len();
         }
 
         if has_dirty_data || update_matrix {
@@ -244,6 +246,8 @@ impl ViewCore {
             * Matrix4::from_scale(self.camera_base_zoom * self.camera_zoom)
             * Matrix4::from(self.trackball_angle)
             * Matrix4::from_translation(self.camera_base_translation);
+        leptos::logging::log!("base zoom: {:?}", self.camera_base_zoom);
+        leptos::logging::log!("zoom: {:?}", self.camera_zoom);
         let mut normal_mat = view.invert().expect("failed to invert the view matrix");
         normal_mat.transpose_self();
 
