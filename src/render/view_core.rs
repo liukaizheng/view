@@ -246,8 +246,6 @@ impl ViewCore {
             * Matrix4::from_scale(self.camera_base_zoom * self.camera_zoom)
             * Matrix4::from(self.trackball_angle)
             * Matrix4::from_translation(self.camera_base_translation);
-        leptos::logging::log!("base zoom: {:?}", self.camera_base_zoom);
-        leptos::logging::log!("zoom: {:?}", self.camera_zoom);
         let mut normal_mat = view.invert().expect("failed to invert the view matrix");
         normal_mat.transpose_self();
 
