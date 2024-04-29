@@ -92,7 +92,9 @@ impl ApplicationHandler for App {
             WindowEvent::Resized(size) => {
                 let viewer = self.viewer.borrow();
                 let mut render = viewer.render.borrow_mut();
-                render.as_mut().unwrap().resize(size.width, size.height);
+                if let Some(render) = render.as_mut() {
+                    render.resize(size.width, size.height);
+                }
             }
             _ => {}
         }
