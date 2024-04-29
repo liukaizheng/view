@@ -160,11 +160,13 @@ impl ViewData {
                     vertex: wgpu::VertexState {
                         module: &shader,
                         entry_point: "vs_main",
+                        compilation_options: Default::default(),
                         buffers: &[Vertex::desc()],
                     },
                     fragment: Some(wgpu::FragmentState {
                         module: &shader,
                         entry_point: "fs_main",
+                        compilation_options: Default::default(),
                         targets: &[Some(render.config.format.into())],
                     }),
                     primitive: wgpu::PrimitiveState {
