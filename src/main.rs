@@ -94,6 +94,19 @@ impl ApplicationHandler for App {
                 let mut render = viewer.render.borrow_mut();
                 if let Some(render) = render.as_mut() {
                     render.resize(size.width, size.height);
+                } else {
+                    let canvas = self.canvas.clone();
+                    let viewer = self.viewer.clone();
+                    spawn_local(async move {
+                        match Renderer::new(canvas.clone(), size.width, size.height).await {
+                            Ok(r) => {
+                                viewer.borrow().render.borrow_mut().replace(r);
+                            }
+                            Err(e) => {
+                                logging::error!("create viewer failed by {:?}", e);
+                            }
+                        }
+                    })
                 }
             }
             _ => {}
@@ -109,32 +122,22 @@ fn main() -> Result<()> {
 
     let (tx, rx) = mpsc::channel();
     {
-        let render = render.clone();
         canvas.on_load(move |canvas: HtmlElement<Canvas>| {
             let c = canvas.clone();
-            spawn_local(async move {
-                let canvas = canvas.deref();
-                match Renderer::new(canvas.clone()).await {
-                    Ok(r) => {
-                        render.borrow_mut().replace(r);
-                    }
-                    Err(e) => {
-                        logging::error!("create viewer failed by {:?}", e);
-                    }
-                }
-            });
-            tx.send(c.clone()).unwrap();
+            leptos::logging::log!("send canvas");
+            tx.send(c).unwrap();
         });
 
         let viewer = viewer.clone();
         leptos::mount_to_body(move || view! { <App canvas viewer = viewer.clone() />});
+        leptos::logging::log!("mount");
     }
 
     let event_loop = event_loop::EventLoop::new()?;
     let canvas = rx.recv()?;
     event_loop.set_control_flow(event_loop::ControlFlow::Wait);
 
-    let mut app = App::new(canvas.deref().clone(), viewer.clone());
+    let mut app = App::new(canvas.deref().clone(), viewer);
     event_loop.run_app(&mut app)?;
 
     Result::Ok(())

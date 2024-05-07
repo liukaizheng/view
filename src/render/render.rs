@@ -13,9 +13,7 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    pub async fn new(canvas: HtmlCanvasElement) -> Result<Self> {
-        let width = canvas.width();
-        let height = canvas.height();
+    pub async fn new(canvas: HtmlCanvasElement, width: u32, height: u32) -> Result<Self> {
         let instance = wgpu::Instance::default();
         let surface = instance.create_surface(SurfaceTarget::Canvas(canvas))?;
         let adapter = instance
