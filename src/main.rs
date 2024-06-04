@@ -81,7 +81,7 @@ impl ApplicationHandler for App {
 
             WindowEvent::RedrawRequested => {
                 if let Err(msg) = self.viewer.borrow_mut().render() {
-                    logging::error!("faild to render because {:?}", msg);
+                    logging::error!("failed to render because {:?}", msg);
                 } else {
                     if let Some(window) = self.window.as_ref() {
                         window.request_redraw();
