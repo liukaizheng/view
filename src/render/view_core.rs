@@ -6,7 +6,11 @@ use super::{
     BBox,
 };
 
-use wgpu::{util::DeviceExt, BindGroup, BindGroupLayout, Buffer};
+use wgpu::{
+    util::DeviceExt, BindGroup, BindGroupLayout, Buffer, CompareFunction, RenderPipeline, TextureFormat,
+};
+
+use crate::render::view_data::Vertex;
 
 struct ViewBuffer {
     camera_bind_group_layout: BindGroupLayout,
@@ -34,6 +38,10 @@ pub(crate) struct ViewCore {
     pub trackball_angle: Quaternion<f32>,
 
     view_buffer: Option<ViewBuffer>,
+
+    pub(crate) material_bind_group_layout: Option<BindGroupLayout>,
+    pub(crate) pipeline_cull_back: Option<RenderPipeline>,
+    pub(crate) pipeline_cull_front: Option<RenderPipeline>,
 }
 
 impl Default for ViewCore {
@@ -55,6 +63,10 @@ impl Default for ViewCore {
             trackball_angle: Quaternion::<f32>::new(1.0, 0.0, 0.0, 0.0),
 
             view_buffer: None,
+
+            material_bind_group_layout: None,
+            pipeline_cull_back: None,
+            pipeline_cull_front: None,
         }
     }
 }
@@ -189,6 +201,97 @@ impl ViewCore {
                 normal_mat_buffer,
             });
         }
+
+        if self.material_bind_group_layout.is_none() {
+            let material_bind_group_layout =
+                render
+                    .device
+                    .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                        label: Some("camera_bind_group_layout"),
+                        entries: &[wgpu::BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Uniform,
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        }],
+                    });
+
+            let shader = render
+                .device
+                .create_shader_module(wgpu::ShaderModuleDescriptor {
+                    label: Some("shader"),
+                    source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
+                });
+
+            let render_pipeline_layout =
+                render
+                    .device
+                    .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                        label: Some("render_pipeline_layout"),
+                        bind_group_layouts: &[
+                            &self
+                                .view_buffer
+                                .as_ref()
+                                .unwrap()
+                                .camera_bind_group_layout,
+                            &material_bind_group_layout,
+                        ],
+                        push_constant_ranges: &[],
+                    });
+
+            let pipeline_desc_base = wgpu::RenderPipelineDescriptor {
+                label: Some("render_pipeline"),
+                layout: Some(&render_pipeline_layout),
+                cache: None,
+                vertex: wgpu::VertexState {
+                    module: &shader,
+                    entry_point: Some("vs_main"),
+                    compilation_options: Default::default(),
+                    buffers: &[Vertex::desc()],
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: Some("fs_main"),
+                    compilation_options: Default::default(),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: render.config.format,
+                        blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                }),
+                primitive: wgpu::PrimitiveState {
+                    topology: wgpu::PrimitiveTopology::TriangleList,
+                    front_face: wgpu::FrontFace::Ccw,
+                    cull_mode: Some(wgpu::Face::Back),
+                    ..Default::default()
+                },
+                depth_stencil: Some(wgpu::DepthStencilState {
+                    format: TextureFormat::Depth32Float,
+                    depth_write_enabled: true,
+                    depth_compare: CompareFunction::Less,
+                    stencil: wgpu::StencilState::default(),
+                    bias: wgpu::DepthBiasState::default(),
+                }),
+                multisample: wgpu::MultisampleState::default(),
+                multiview: None,
+            };
+
+            let render_pipeline_cull_back =
+                render.device.create_render_pipeline(&pipeline_desc_base);
+
+            let mut pipeline_desc_inv = pipeline_desc_base.clone();
+            pipeline_desc_inv.primitive.cull_mode = Some(wgpu::Face::Front);
+            let render_pipeline_cull_front =
+                render.device.create_render_pipeline(&pipeline_desc_inv);
+
+            self.material_bind_group_layout = Some(material_bind_group_layout);
+            self.pipeline_cull_back = Some(render_pipeline_cull_back);
+            self.pipeline_cull_front = Some(render_pipeline_cull_front);
+        }
         let mut has_dirty_data = false;
         for data in data_map.values_mut() {
             if !data.visible {
@@ -196,9 +299,9 @@ impl ViewCore {
             }
 
             if data.pipeline.is_none() {
-                data.init_pipline(
+                data.init_resources(
                     render,
-                    &self.view_buffer.as_ref().unwrap().camera_bind_group_layout,
+                    &self.material_bind_group_layout.as_ref().unwrap(),
                 );
             }
             if data.dirty.contains(DirtyFlags::DIRTY_VERTEX) {
@@ -236,7 +339,11 @@ impl ViewCore {
         );
         for data in data_map.values() {
             if data.visible {
-                data.render(render_pass);
+                data.render(
+                    render_pass,
+                    self.pipeline_cull_back.as_ref().unwrap(),
+                    self.pipeline_cull_front.as_ref().unwrap(),
+                );
             }
         }
     }
