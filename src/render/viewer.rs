@@ -59,10 +59,23 @@ impl Viewer {
                     let vab = verts[1] - verts[0];
                     let vac = verts[2] - verts[0];
                     let normal = vab.cross(vac).normalize();
-                    verts.map(|v| Vertex {
-                        point: v.into(),
-                        normal: normal.into(),
-                    })
+                    [
+                        Vertex {
+                            point: verts[0].into(),
+                            normal: normal.into(),
+                            barycentric: [1.0, 0.0, 0.0],
+                        },
+                        Vertex {
+                            point: verts[1].into(),
+                            normal: normal.into(),
+                            barycentric: [0.0, 1.0, 0.0],
+                        },
+                        Vertex {
+                            point: verts[2].into(),
+                            normal: normal.into(),
+                            barycentric: [0.0, 0.0, 1.0],
+                        },
+                    ]
                 })
                 .flatten(),
         );
@@ -187,6 +200,20 @@ impl Viewer {
     pub fn set_visible(&mut self, id: u32, visible: bool) {
         if let Some(data) = self.data.get_mut(&id) {
             data.set_visible(visible);
+        }
+    }
+
+    pub fn set_edge_width(&mut self, id: u32, width: f32) {
+        if let Some(data) = self.data.get_mut(&id) {
+            data.material.edge_width = width;
+            data.dirty.insert(crate::render::view_data::DirtyFlags::DIRTY_MATERIAL);
+        }
+    }
+
+    pub fn set_edge_color(&mut self, id: u32, color: [f32; 4]) {
+        if let Some(data) = self.data.get_mut(&id) {
+            data.material.edge_color = color;
+            data.dirty.insert(crate::render::view_data::DirtyFlags::DIRTY_MATERIAL);
         }
     }
 }

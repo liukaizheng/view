@@ -20,6 +20,7 @@ bitflags::bitflags! {
 pub(crate) struct Vertex {
     pub(crate) point: [f32; 3],
     pub(crate) normal: [f32; 3],
+    pub(crate) barycentric: [f32; 3],
 }
 
 impl Vertex {
@@ -38,6 +39,11 @@ impl Vertex {
                     shader_location: 1,
                     format: wgpu::VertexFormat::Float32x3,
                 },
+                wgpu::VertexAttribute {
+                    offset: (std::mem::size_of::<[f32; 3]>() * 2) as wgpu::BufferAddress,
+                    shader_location: 2,
+                    format: wgpu::VertexFormat::Float32x3,
+                },
             ],
         }
     }
@@ -52,6 +58,11 @@ pub(crate) struct Material {
     pub(crate) kd: [f32; 4],
     /// specular color
     pub(crate) ks: [f32; 4],
+    /// edge color
+    pub(crate) edge_color: [f32; 4],
+    /// edge width
+    pub(crate) edge_width: f32,
+    pub(crate) _pad: [f32; 3],
 }
 
 impl Material {
@@ -64,6 +75,9 @@ impl Material {
             ka: [ka.x, ka.y, ka.z, 1.0],
             kd: [kd.x, kd.y, kd.z, 1.0],
             ks: [ks.x, ks.y, ks.z, 1.0],
+            edge_color: [0.0, 0.0, 0.0, 1.0],
+            edge_width: 0.0,
+            _pad: [0.0; 3],
         }
     }
 }
@@ -77,7 +91,7 @@ pub(crate) struct MeshPipeline {
 }
 pub(crate) struct ViewData {
     vertices: Vec<Vertex>,
-    material: Material,
+    pub(crate) material: Material,
     pub(crate) dirty: DirtyFlags,
     pub(crate) bbox: BBox,
     pub(crate) pipeline: Option<MeshPipeline>,

@@ -1,12 +1,14 @@
 struct VertexInput {
     @location(0) point: vec3<f32>,
     @location(1) normal: vec3<f32>,
+    @location(2) barycentric: vec3<f32>,
 }
 
 struct VertexOutput {
     @builtin(position) clip_pos: vec4<f32>,
     @location(0) pos_in_eye: vec3<f32>,
     @location(1) normal: vec3<f32>,
+    @location(2) barycentric: vec3<f32>,
 }
 
 // Because Downlevel flags BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED are required but not supported on web
@@ -15,6 +17,11 @@ struct Material {
     ka: vec4<f32>,
     kd: vec4<f32>,
     ks: vec4<f32>,
+    edge_color: vec4<f32>,
+    edge_width: f32,
+    _pad1: f32,
+    _pad2: f32,
+    _pad3: f32,
 }
 
 @group(0) @binding(0)
@@ -45,6 +52,7 @@ fn vs_main(v: VertexInput) -> VertexOutput {
 
     var normal_in_eye = (normal_mat * vec4f(v.normal, 1.0)).xyz;
     out.normal = normalize(normal_in_eye);
+    out.barycentric = v.barycentric;
     return out;
 }
 
@@ -65,5 +73,18 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // secular intensity
     let is = material.ks.xyz * specular_factor;
     
-    return vec4f(ia + id + is, 1.0);
+    let base_color = vec4f(ia + id + is, 1.0);
+
+    if (material.edge_width > 0.0) {
+        let d = min(min(in.barycentric.x, in.barycentric.y), in.barycentric.z);
+        // Compute derivatives to get screen-space rate of change
+        let dd = fwidth(d);
+        // Calculate edge intensity using smoothstep for anti-aliasing
+        // Edge width is separate from the smoothing feather
+        let edge_intensity = 1.0 - smoothstep(material.edge_width * dd, (material.edge_width + 1.0) * dd, d);
+        
+        return mix(base_color, material.edge_color, edge_intensity);
+    }
+
+    return base_color;
 }

@@ -21,6 +21,9 @@ pub struct Model {
     name: RwSignal<String>,
     data: RwSignal<RawModel>,
     show: RwSignal<bool>,
+    show_edges: RwSignal<bool>,
+    edge_width: RwSignal<f64>,
+    edge_color: RwSignal<String>,
 }
 
 impl Model {
@@ -30,6 +33,9 @@ impl Model {
             name: RwSignal::new(name),
             data: RwSignal::new(model),
             show: RwSignal::new(true),
+            show_edges: RwSignal::new(false),
+            edge_width: RwSignal::new(1.0),
+            edge_color: RwSignal::new("#000000".to_string()),
         }
     }
 }
@@ -93,6 +99,14 @@ fn write_obj(points: &[f64], triangles: &[usize]) -> String {
     txt
 }
 
+fn hex_to_rgba(hex: &str) -> [f32; 4] {
+    let hex = hex.trim_start_matches('#');
+    let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(0) as f32 / 255.0;
+    let g = u8::from_str_radix(&hex[2..4], 16).unwrap_or(0) as f32 / 255.0;
+    let b = u8::from_str_radix(&hex[4..6], 16).unwrap_or(0) as f32 / 255.0;
+    [r, g, b, 1.0]
+}
+
 #[component]
 pub fn Model(model: Model) -> impl IntoView {
     let viewer = expect_context::<ViewerWrapper>();
@@ -100,6 +114,26 @@ pub fn Model(model: Model) -> impl IntoView {
         let viewer = viewer.clone();
         Effect::new(move |_| {
             viewer.borrow_mut().set_visible(model.id, model.show.get());
+        });
+    }
+
+    {
+        let viewer = viewer.clone();
+        Effect::new(move |_| {
+             let width = if model.show_edges.get() { model.edge_width.get() as f32 } else { 0.0 };
+            viewer
+                .borrow_mut()
+                .set_edge_width(model.id, width);
+        });
+    }
+
+    {
+        let viewer = viewer.clone();
+        Effect::new(move |_| {
+            let color = hex_to_rgba(&model.edge_color.get());
+            viewer
+                .borrow_mut()
+                .set_edge_color(model.id, color);
         });
     }
 
@@ -139,11 +173,14 @@ pub fn Model(model: Model) -> impl IntoView {
     let toggle_show = move |_| {
         model.show.update(|show| *show = !*show);
     };
+    let toggle_edges = move |_| {
+        model.show_edges.update(|show| *show = !*show);
+    };
     const SHOW_CLASS_ATTR: &str = "w-full";
     const HIDE_CLASS_ATTR: &str = "w-full text-gray-400";
     view! {
-          <li class = "group/li w-full p-2 hover:bg-emerald-100">
-              <div class = "flex flex-1 items-center justify-center">
+          <li class = "group/li w-full p-2 hover:bg-emerald-100 flex flex-col">
+              <div class = "flex flex-1 items-center justify-center w-full">
                   <label class = move || if model.show.get() { SHOW_CLASS_ATTR} else {HIDE_CLASS_ATTR}>
                       {move || model.name.get() }
                   </label>
@@ -151,13 +188,22 @@ pub fn Model(model: Model) -> impl IntoView {
                   <button on:click = toggle_show class = "group/button w-6 h-6 hover:bg-emerald-200 rounded-full items-center justify-center hidden group-hover/li:flex mr-1">
                       { move || {
                           if model.show.get() {
-                              view! { <svg class= "w-4 h-4 stroke-2 stroke-emerald-900" aria-hidden="true" fill="none" viewBox="0 0 20 14"> <g> <path d="M10 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/> <path d="M10 13c4.97 0 9-2.686 9-6s-4.03-6-9-6-9 2.686-9 6 4.03 6 9 6Z"/> </g> </svg>}.into_any()
+                               view! { <svg class= "w-4 h-4 stroke-2 stroke-emerald-900" aria-hidden="true" fill="none" viewBox="0 0 20 14"> <g> <path d="M10 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/> <path d="M10 13c4.97 0 9-2.686 9-6s-4.03-6-9-6-9 2.686-9 6 4.03 6 9 6Z"/> </g> </svg>}.into_any()
                           } else {
-                              view! {<svg class= "w-4 h-4 stroke-2 stroke-emerald-900" aria-hidden="true" fill="none" viewBox="0 0 20 18"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M1.933 10.909A4.357 4.357 0 0 1 1 9c0-1 4-6 9-6m7.6 3.8A5.068 5.068 0 0 1 19 9c0 1-3 6-9 6-.314 0-.62-.014-.918-.04M2 17 18 1m-5 8a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/>
-    </svg>}.into_any()
+                               view! {<svg class= "w-4 h-4 stroke-2 stroke-emerald-900" aria-hidden="true" fill="none" viewBox="0 0 20 18"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M1.933 10.909A4.357 4.357 0 0 1 1 9c0-1 4-6 9-6m7.6 3.8A5.068 5.068 0 0 1 19 9c0 1-3 6-9 6-.314 0-.62-.014-.918-.04M2 17 18 1m-5 8a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/>
+        </svg>}.into_any()
                           }
                       }}
                   </button>
+                    <button on:click = toggle_edges class = "group/button w-6 h-6 hover:bg-emerald-200 rounded-full items-center justify-center hidden group-hover/li:flex mr-1" title="Toggle Edges">
+                        { move || {
+                             if model.show_edges.get() {
+                                  view! { <svg class= "w-4 h-4 stroke-2 stroke-emerald-900" fill="none" viewBox="0 0 24 24" stroke="currentColor"> <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/> </svg>}.into_any()
+                             } else {
+                                  view! { <svg class= "w-4 h-4 stroke-2 stroke-emerald-900" fill="none" viewBox="0 0 24 24" stroke="currentColor"> <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/> </svg>}.into_any()
+                             }
+                        }}
+                    </button>
                   <button on:click = write_to_local class = "group/button w-6 h-6 hover:bg-emerald-200 rounded-full items-center justify-center hidden group-hover/li:flex mr-1">
                       <svg viewBox="0 0 24 24" class = "w-4 h-4 fill-emerald-900"><path d="M18.948 11.112C18.511 7.67 15.563 5 12.004 5c-2.756 0-5.15 1.611-6.243 4.15-2.148.642-3.757 2.67-3.757 4.85 0 2.757 2.243 5 5 5h1v-2h-1c-1.654 0-3-1.346-3-3 0-1.404 1.199-2.757 2.673-3.016l.581-.102.192-.558C8.153 8.273 9.898 7 12.004 7c2.757 0 5 2.243 5 5v1h1c1.103 0 2 .897 2 2s-.897 2-2 2h-2v2h2c2.206 0 4-1.794 4-4a4.008 4.008 0 0 0-3.056-3.888z"></path><path d="M13.004 14v-4h-2v4h-3l4 5 4-5z"></path></svg>
                   </button>
@@ -166,6 +212,26 @@ pub fn Model(model: Model) -> impl IntoView {
                   </button>
                   </div>
               </div>
+               { move || {
+                 if model.show_edges.get() {
+                     view! {
+                         <div class="flex items-center space-x-2 mt-2 px-2 text-xs w-full">
+                            <input type="range" min="0.5" max="5.0" step="0.5"
+                                prop:value=move || model.edge_width.get()
+                                on:input=move |ev| model.edge_width.set(event_target_value(&ev).parse().unwrap_or(1.0))
+                                class="w-20"
+                            />
+                            <input type="color"
+                                prop:value=move || model.edge_color.get()
+                                on:input=move |ev| model.edge_color.set(event_target_value(&ev))
+                                class="w-6 h-6 border-none bg-transparent"
+                            />
+                         </div>
+                     }.into_any()
+                 } else {
+                     view! { <div/> }.into_any()
+                 }
+               }}
           </li>
       }
 }
