@@ -289,6 +289,7 @@ pub fn App(
     canvas: NodeRef<leptos::html::Canvas>,
     viewer: ViewerWrapper,
 ) -> impl IntoView {
+    web_sys::console::log_1(&"App component rendering".into());
     let (models, set_models) = signal(Models::new());
     provide_context(set_models);
     provide_context(viewer.clone());

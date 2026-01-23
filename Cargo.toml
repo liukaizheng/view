@@ -12,7 +12,7 @@ tobj = { version = "4.0", features = ["use_f64"], default-features = false }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 gloo-timers = { version = "0.3.0", features = ["futures"] }
-wgpu = "0.20"
+wgpu = "24.0"
 pollster = "0.3.0"
 winit = "0.30"
 anyhow = "1.0.75"

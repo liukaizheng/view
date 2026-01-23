@@ -1,12 +1,10 @@
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::mpsc;
-
 use anyhow::Result;
 use leptos::html::Canvas;
 use leptos::prelude::*;
 use leptos::mount::mount_to_body;
-use leptos::task::spawn_local;
+use wasm_bindgen_futures::spawn_local;
 use send_wrapper::SendWrapper;
 use view::render::render::Renderer;
 use view::render::viewer::{self, MousePressed, Viewer};
@@ -22,29 +20,59 @@ use winit::{event, event_loop};
 extern crate console_error_panic_hook;
 use std::panic;
 
+#[derive(Debug)]
+enum AppEvent {
+    CanvasReady(HtmlCanvasElement),
+}
+
 struct WinitApp {
     window: Option<Window>,
-    canvas: HtmlCanvasElement,
+    canvas: Option<HtmlCanvasElement>,
     viewer: Rc<RefCell<Viewer>>,
 }
 
 impl WinitApp {
-    fn new(canvas: HtmlCanvasElement, viewer: Rc<RefCell<Viewer>>) -> Self {
+    fn new(viewer: Rc<RefCell<Viewer>>) -> Self {
         Self {
             window: None,
-            canvas,
+            canvas: None,
             viewer,
         }
     }
 }
 
-impl ApplicationHandler for WinitApp {
+impl ApplicationHandler<AppEvent> for WinitApp {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        self.window = Some(
-            event_loop
-                .create_window(Window::default_attributes().with_canvas(Some(self.canvas.clone())))
-                .expect("create window failed"),
-        );
+        if let Some(canvas) = &self.canvas {
+            if self.window.is_none() {
+                web_sys::console::log_1(&"Creating window with ready canvas".into());
+                self.window = Some(
+                    event_loop
+                        .create_window(Window::default_attributes().with_canvas(Some(canvas.clone())))
+                        .expect("create window failed"),
+                );
+            }
+        } else {
+             web_sys::console::log_1(&"Resumed called but canvas not ready yet".into());
+        }
+    }
+
+    fn user_event(&mut self, event_loop: &ActiveEventLoop, event: AppEvent) {
+        match event {
+            AppEvent::CanvasReady(canvas) => {
+                web_sys::console::log_1(&"Received CanvasReady event".into());
+                self.canvas = Some(canvas);
+                // Trigger window creation if we're already resumed (mostly likely yes)
+                if self.window.is_none() {
+                     web_sys::console::log_1(&"Creating window from UserEvent".into());
+                     self.window = Some(
+                        event_loop
+                            .create_window(Window::default_attributes().with_canvas(self.canvas.clone()))
+                            .expect("create window failed"),
+                    );
+                }
+            }
+        }
     }
 
     fn window_event(
@@ -97,18 +125,20 @@ impl ApplicationHandler for WinitApp {
                 if let Some(render) = render.as_mut() {
                     render.resize(size.width, size.height);
                 } else {
-                    let canvas = self.canvas.clone();
-                    let viewer = self.viewer.clone();
-                    spawn_local(async move {
-                        match Renderer::new(canvas.clone(), size.width, size.height).await {
-                            Ok(r) => {
-                                viewer.borrow().render.borrow_mut().replace(r);
+                    if let Some(canvas) = &self.canvas {
+                        let canvas = canvas.clone();
+                        let viewer = self.viewer.clone();
+                         spawn_local(async move {
+                            match Renderer::new(canvas.clone(), size.width, size.height).await {
+                                Ok(r) => {
+                                    viewer.borrow().render.borrow_mut().replace(r);
+                                }
+                                Err(e) => {
+                                    web_sys::console::error_1(&format!("create viewer failed by {:?}", e).into());
+                                }
                             }
-                            Err(e) => {
-                                web_sys::console::error_1(&format!("create viewer failed by {:?}", e).into());
-                            }
-                        }
-                    })
+                        })
+                    }
                 }
             }
             _ => {}
@@ -118,32 +148,37 @@ impl ApplicationHandler for WinitApp {
 
 fn main() -> Result<()> {
     panic::set_hook(Box::new(console_error_panic_hook::hook));
-    let canvas: NodeRef<Canvas> = NodeRef::new();
+    web_sys::console::log_1(&"Initializing application...".into());
+
     let render: Rc<RefCell<Option<Renderer>>> = Default::default();
     let viewer = Rc::new(RefCell::new(viewer::Viewer::new(render.clone())));
     let viewer_wrapper: ViewerWrapper = SendWrapper::new(viewer.clone());
+    
+    let event_loop = event_loop::EventLoop::<AppEvent>::with_user_event().build()?;
+    let proxy = event_loop.create_proxy();
 
-    let (tx, rx) = mpsc::channel();
-    {
-        let canvas_for_closure = canvas.clone();
+    let canvas_ref: NodeRef<Canvas> = NodeRef::new();
+    
+    mount_to_body(move || {
+        let canvas_ref = canvas_ref.clone();
+        let proxy = proxy.clone();
+        
         Effect::new(move |_| {
-            if let Some(c) = canvas_for_closure.get() {
-                let canvas_el: web_sys::HtmlCanvasElement = c.into();
-                web_sys::console::log_1(&"send canvas".into());
-                let _ = tx.send(canvas_el);
+            if let Some(c) = canvas_ref.get() {
+                 let canvas_el: HtmlCanvasElement = c.into();
+                 web_sys::console::log_1(&"Canvas found in Effect, sending to proxy".into());
+                 let _ = proxy.send_event(AppEvent::CanvasReady(canvas_el));
             }
         });
+        
+        view! { <view::App canvas=canvas_ref viewer=viewer_wrapper.clone() /> } 
+    });
+    web_sys::console::log_1(&"Leptos app mounted".into());
 
-        let viewer_wrapper = viewer_wrapper.clone();
-        mount_to_body(move || view! { <view::App canvas viewer = viewer_wrapper.clone() />});
-        web_sys::console::log_1(&"mount".into());
-    }
-
-    let event_loop = event_loop::EventLoop::new()?;
-    let canvas = rx.recv()?;
     event_loop.set_control_flow(event_loop::ControlFlow::Wait);
 
-    let mut app = WinitApp::new(canvas, viewer);
+    let mut app = WinitApp::new(viewer);
+    web_sys::console::log_1(&"Starting event loop".into());
     event_loop.run_app(&mut app)?;
 
     Result::Ok(())
