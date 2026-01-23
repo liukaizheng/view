@@ -1,14 +1,16 @@
 use std::cell::RefCell;
-use std::ops::Deref;
 use std::rc::Rc;
 use std::sync::mpsc;
 
 use anyhow::Result;
 use leptos::html::Canvas;
-use leptos::*;
+use leptos::prelude::*;
+use leptos::mount::mount_to_body;
+use leptos::task::spawn_local;
+use send_wrapper::SendWrapper;
 use view::render::render::Renderer;
 use view::render::viewer::{self, MousePressed, Viewer};
-use view::App;
+use view::ViewerWrapper;
 use web_sys::HtmlCanvasElement;
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
@@ -20,13 +22,13 @@ use winit::{event, event_loop};
 extern crate console_error_panic_hook;
 use std::panic;
 
-struct App {
+struct WinitApp {
     window: Option<Window>,
     canvas: HtmlCanvasElement,
     viewer: Rc<RefCell<Viewer>>,
 }
 
-impl App {
+impl WinitApp {
     fn new(canvas: HtmlCanvasElement, viewer: Rc<RefCell<Viewer>>) -> Self {
         Self {
             window: None,
@@ -36,7 +38,7 @@ impl App {
     }
 }
 
-impl ApplicationHandler for App {
+impl ApplicationHandler for WinitApp {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         self.window = Some(
             event_loop
@@ -53,7 +55,7 @@ impl ApplicationHandler for App {
     ) {
         match event {
             WindowEvent::KeyboardInput { event, .. } => {
-                leptos::logging::log!("{:?}", event);
+                web_sys::console::log_1(&format!("{:?}", event).into());
             }
 
             WindowEvent::CursorMoved { position, .. } => {
@@ -81,7 +83,7 @@ impl ApplicationHandler for App {
 
             WindowEvent::RedrawRequested => {
                 if let Err(msg) = self.viewer.borrow_mut().render() {
-                    logging::error!("failed to render because {:?}", msg);
+                    web_sys::console::error_1(&format!("failed to render because {:?}", msg).into());
                 } else {
                     if let Some(window) = self.window.as_ref() {
                         window.request_redraw();
@@ -103,7 +105,7 @@ impl ApplicationHandler for App {
                                 viewer.borrow().render.borrow_mut().replace(r);
                             }
                             Err(e) => {
-                                logging::error!("create viewer failed by {:?}", e);
+                                web_sys::console::error_1(&format!("create viewer failed by {:?}", e).into());
                             }
                         }
                     })
@@ -116,28 +118,32 @@ impl ApplicationHandler for App {
 
 fn main() -> Result<()> {
     panic::set_hook(Box::new(console_error_panic_hook::hook));
-    let canvas: NodeRef<Canvas> = create_node_ref();
+    let canvas: NodeRef<Canvas> = NodeRef::new();
     let render: Rc<RefCell<Option<Renderer>>> = Default::default();
     let viewer = Rc::new(RefCell::new(viewer::Viewer::new(render.clone())));
+    let viewer_wrapper: ViewerWrapper = SendWrapper::new(viewer.clone());
 
     let (tx, rx) = mpsc::channel();
     {
-        canvas.on_load(move |canvas: HtmlElement<Canvas>| {
-            let c = canvas.clone();
-            leptos::logging::log!("send canvas");
-            tx.send(c).unwrap();
+        let canvas_for_closure = canvas.clone();
+        Effect::new(move |_| {
+            if let Some(c) = canvas_for_closure.get() {
+                let canvas_el: web_sys::HtmlCanvasElement = c.into();
+                web_sys::console::log_1(&"send canvas".into());
+                let _ = tx.send(canvas_el);
+            }
         });
 
-        let viewer = viewer.clone();
-        leptos::mount_to_body(move || view! { <App canvas viewer = viewer.clone() />});
-        leptos::logging::log!("mount");
+        let viewer_wrapper = viewer_wrapper.clone();
+        mount_to_body(move || view! { <view::App canvas viewer = viewer_wrapper.clone() />});
+        web_sys::console::log_1(&"mount".into());
     }
 
     let event_loop = event_loop::EventLoop::new()?;
     let canvas = rx.recv()?;
     event_loop.set_control_flow(event_loop::ControlFlow::Wait);
 
-    let mut app = App::new(canvas.deref().clone(), viewer);
+    let mut app = WinitApp::new(canvas, viewer);
     event_loop.run_app(&mut app)?;
 
     Result::Ok(())

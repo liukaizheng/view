@@ -1,10 +1,15 @@
 use std::{cell::RefCell, collections::HashMap, io::BufReader, rc::Rc};
 
 use js_sys::Uint8Array;
-use leptos::*;
+use leptos::prelude::*;
+use leptos::task::spawn_local;
+use send_wrapper::SendWrapper;
 use tobj::Material;
+use wasm_bindgen::JsCast;
 
 use crate::render::viewer::Viewer;
+
+pub type ViewerWrapper = SendWrapper<Rc<RefCell<Viewer>>>;
 
 pub mod render;
 
@@ -22,9 +27,9 @@ impl Model {
     fn new(name: String, model: RawModel, id: u32) -> Self {
         Self {
             id,
-            name: create_rw_signal(name),
-            data: create_rw_signal(model),
-            show: create_rw_signal(true),
+            name: RwSignal::new(name),
+            data: RwSignal::new(model),
+            show: RwSignal::new(true),
         }
     }
 }
@@ -49,7 +54,7 @@ impl Models {
         for m in &mut self.0 {
             let show = m.show.clone();
             if show.get() {
-                show.update(|s| *s = false);
+                show.set(false);
             }
         }
     }
@@ -72,7 +77,7 @@ async fn read_obj_from_file(file: web_sys::File) -> Result<RawModel, String> {
             ));
         }
     } else {
-        leptos::logging::warn!("failed to read file buffer");
+        web_sys::console::warn_1(&"failed to read file buffer".into());
     }
     Err("failed to read obj".to_owned())
 }
@@ -89,10 +94,11 @@ fn write_obj(points: &[f64], triangles: &[usize]) -> String {
 }
 
 #[component]
-pub fn Model(model: Model, viewer: Rc<RefCell<Viewer>>) -> impl IntoView {
+pub fn Model(model: Model) -> impl IntoView {
+    let viewer = expect_context::<ViewerWrapper>();
     {
         let viewer = viewer.clone();
-        create_effect(move |_| {
+        Effect::new(move |_| {
             viewer.borrow_mut().set_visible(model.id, model.show.get());
         });
     }
@@ -101,12 +107,18 @@ pub fn Model(model: Model, viewer: Rc<RefCell<Viewer>>) -> impl IntoView {
         let (points, triangles) = model.data.get();
         let txt = write_obj(&points, &triangles);
         let parts = js_sys::Array::of1(&unsafe { Uint8Array::view(txt.as_bytes()).into() });
-        let mut properties = web_sys::BlobPropertyBag::new();
-        properties.type_("model/obj");
+        let properties = web_sys::BlobPropertyBag::new();
+        properties.set_type("model/obj");
         if let Ok(blob) =
             web_sys::Blob::new_with_buffer_source_sequence_and_options(&parts, &properties)
         {
-            let link = html::a();
+            let link = web_sys::window()
+                .unwrap()
+                .document()
+                .unwrap()
+                .create_element("a")
+                .unwrap();
+            let link: web_sys::HtmlAnchorElement = link.dyn_into().unwrap();
             let url = web_sys::Url::create_object_url_with_blob(&blob).unwrap();
             link.set_href(&url);
             link.set_download(&(model.name.get() + ".obj"));
@@ -115,12 +127,13 @@ pub fn Model(model: Model, viewer: Rc<RefCell<Viewer>>) -> impl IntoView {
         }
     };
 
-    let set_models = use_context::<WriteSignal<Models>>().unwrap();
+    let set_models = expect_context::<WriteSignal<Models>>();
+    let viewer_for_destroy = viewer.clone();
     let destroy = move |_| {
         set_models.update(|models| {
             let id = model.id;
             models.remove(model.id);
-            viewer.borrow_mut().remove_data(id);
+            viewer_for_destroy.borrow_mut().remove_data(id);
         });
     };
     let toggle_show = move |_| {
@@ -138,10 +151,10 @@ pub fn Model(model: Model, viewer: Rc<RefCell<Viewer>>) -> impl IntoView {
                   <button on:click = toggle_show class = "group/button w-6 h-6 hover:bg-emerald-200 rounded-full items-center justify-center hidden group-hover/li:flex mr-1">
                       { move || {
                           if model.show.get() {
-                              view! { <svg class= "w-4 h-4 stroke-2 stroke-emerald-900" aria-hidden="true" fill="none" viewBox="0 0 20 14"> <g> <path d="M10 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/> <path d="M10 13c4.97 0 9-2.686 9-6s-4.03-6-9-6-9 2.686-9 6 4.03 6 9 6Z"/> </g> </svg>}
+                              view! { <svg class= "w-4 h-4 stroke-2 stroke-emerald-900" aria-hidden="true" fill="none" viewBox="0 0 20 14"> <g> <path d="M10 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/> <path d="M10 13c4.97 0 9-2.686 9-6s-4.03-6-9-6-9 2.686-9 6 4.03 6 9 6Z"/> </g> </svg>}.into_any()
                           } else {
                               view! {<svg class= "w-4 h-4 stroke-2 stroke-emerald-900" aria-hidden="true" fill="none" viewBox="0 0 20 18"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M1.933 10.909A4.357 4.357 0 0 1 1 9c0-1 4-6 9-6m7.6 3.8A5.068 5.068 0 0 1 19 9c0 1-3 6-9 6-.314 0-.62-.014-.918-.04M2 17 18 1m-5 8a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/>
-    </svg>}
+    </svg>}.into_any()
                           }
                       }}
                   </button>
@@ -161,14 +174,14 @@ pub fn Model(model: Model, viewer: Rc<RefCell<Viewer>>) -> impl IntoView {
 pub fn ModelList(
     models: ReadSignal<Models>,
     set_models: WriteSignal<Models>,
-    viewer: Rc<RefCell<Viewer>>,
 ) -> impl IntoView {
-    let (fix, set_fix) = create_signal(false);
+    let viewer = expect_context::<ViewerWrapper>();
+    let (fix, set_fix) = signal(false);
     let fix_model = {
         let viewer = viewer.clone();
         move |_| {
             let viewer = viewer.clone();
-            leptos::spawn_local(async move {
+            spawn_local(async move {
                 set_fix.set(true);
                 gloo_timers::future::TimeoutFuture::new(10).await;
                 let mut points = Vec::<f64>::new();
@@ -176,7 +189,7 @@ pub fn ModelList(
                 let mut tri_in_shells = Vec::new();
                 let mut n_points = 0;
                 let mut idx = 0;
-                for model in models().0.iter() {
+                for model in models.get().0.iter() {
                     if !model.show.get() {
                         continue;
                     }
@@ -187,11 +200,8 @@ pub fn ModelList(
                     idx += 1;
                     n_points = points.len() / 3;
                 }
-                let raw_model = gpf::polygonlization::make_mesh_for_triangles(
-                    &points,
-                    &triangles,
-                    &tri_in_shells,
-                );
+                // TODO: gpf dependency was removed, fix functionality disabled
+                let raw_model: RawModel = (points, triangles);
                 set_models.update(|models| {
                     models.hide();
                 });
@@ -205,35 +215,38 @@ pub fn ModelList(
                         id,
                     ));
                 });
-                set_fix(false);
+                set_fix.set(false);
             });
         }
     };
 
-    let file_input = create_node_ref::<html::Input>();
+    let file_input: NodeRef<leptos::html::Input> = NodeRef::new();
     let viewer_clone = viewer.clone();
     let on_change = move |_| {
-        if let Some(files) = file_input.get().unwrap().files() {
-            for i in 0..files.length() {
-                if let Some(file) = files.item(i) {
-                    if let Some(name) = file
-                        .name()
-                        .strip_suffix(".obj")
-                        .and_then(|s| Some(s.to_owned()))
-                    {
-                        let viewer_clone = viewer_clone.clone();
-                        spawn_local(async move {
-                            if let Ok(raw_model) = read_obj_from_file(file).await {
-                                let id = viewer_clone.borrow_mut().append_mesh(
-                                    &raw_model.0,
-                                    &raw_model.1,
-                                    None,
-                                );
-                                set_models.update(|models| {
-                                    models.add(Model::new(name, raw_model, id));
-                                });
-                            }
-                        });
+        if let Some(input_el) = file_input.get() {
+            let input_el: &web_sys::HtmlInputElement = &input_el;
+            if let Some(files) = input_el.files() {
+                for i in 0..files.length() {
+                    if let Some(file) = files.item(i) {
+                        if let Some(name) = file
+                            .name()
+                            .strip_suffix(".obj")
+                            .and_then(|s| Some(s.to_owned()))
+                        {
+                            let viewer_clone = viewer_clone.clone();
+                            spawn_local(async move {
+                                if let Ok(raw_model) = read_obj_from_file(file).await {
+                                    let id = viewer_clone.borrow_mut().append_mesh(
+                                        &raw_model.0,
+                                        &raw_model.1,
+                                        None,
+                                    );
+                                    set_models.update(|models| {
+                                        models.add(Model::new(name, raw_model, id));
+                                    });
+                                }
+                            });
+                        }
                     }
                 }
             }
@@ -249,22 +262,22 @@ pub fn ModelList(
                 <div class = "mt-2 w-full">
                     <ul role = "list" class = "ml-10 w-full divide-y divide-gray-100 shadow rounded bg-white">
                         <For
-                            each = move || models().0.clone()
+                            each = move || models.get().0.clone()
                             key = |model| model.id
-                            children = move |model: Model| view!{ <Model model viewer = viewer.clone()/>}
-                        />
+                            let:model
+                        >
+                            <Model model=model.clone()/>
+                        </For>
                     </ul>
                 </div>
             <button
                 class = "w-20 h-fit p-1 mt-3 rounded-full border border-emerald-600 bg-emerald-100 hover:bg-emerald-200"
-                class:hidden = { move || models.with(|m| m.0.is_empty()) }
-                disabled = { fix }
+                class:hidden = move || models.get().0.is_empty()
+                disabled = move || fix.get()
                 on:click = fix_model
             >
                 {move || {
-                    fix.with(|fix| {
-                        if *fix { "Fixing" } else { "Fix " }
-                    })
+                    if fix.get() { "Fixing" } else { "Fix " }
                 }}
             </button>
         </div>
@@ -273,16 +286,17 @@ pub fn ModelList(
 
 #[component]
 pub fn App(
-    canvas: NodeRef<leptos_dom::html::Canvas>,
-    viewer: Rc<RefCell<Viewer>>,
+    canvas: NodeRef<leptos::html::Canvas>,
+    viewer: ViewerWrapper,
 ) -> impl IntoView {
-    let (models, set_models) = create_signal(Models::new());
+    let (models, set_models) = signal(Models::new());
     provide_context(set_models);
+    provide_context(viewer.clone());
 
     view! {
         <div class = "flex w-full h-full flex-1">
             <div>
-                <ModelList models set_models viewer/>
+                <ModelList models set_models/>
             </div>
             <div class = "w-full h-full">
                 <canvas node_ref = canvas class = "w-full h-full"/>
