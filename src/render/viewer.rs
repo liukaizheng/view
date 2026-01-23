@@ -216,6 +216,26 @@ impl Viewer {
             data.dirty.insert(crate::render::view_data::DirtyFlags::DIRTY_MATERIAL);
         }
     }
+    pub fn set_face_color(&mut self, id: u32, color: [f32; 3]) {
+        if let Some(data) = self.data.get_mut(&id) {
+            let kd = Vector3::new(color[0], color[1], color[2]);
+            let ka = kd * 0.1;
+            const GREY: Vector3<f32> = Vector3::new(0.3, 0.3, 0.3);
+            let ks = GREY + 0.1 * (kd - GREY);
+
+            data.material.ka = [ka.x, ka.y, ka.z, 1.0];
+            data.material.kd = [kd.x, kd.y, kd.z, data.material.kd[3]];
+            data.material.ks = [ks.x, ks.y, ks.z, 1.0];
+            data.dirty.insert(crate::render::view_data::DirtyFlags::DIRTY_MATERIAL);
+        }
+    }
+
+    pub fn set_face_alpha(&mut self, id: u32, alpha: f32) {
+        if let Some(data) = self.data.get_mut(&id) {
+            data.material.kd[3] = alpha;
+            data.dirty.insert(crate::render::view_data::DirtyFlags::DIRTY_MATERIAL);
+        }
+    }
 }
 
 fn two_axis_valuator_fixed_up(

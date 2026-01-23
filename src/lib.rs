@@ -24,6 +24,8 @@ pub struct Model {
     show_edges: RwSignal<bool>,
     edge_width: RwSignal<f64>,
     edge_color: RwSignal<String>,
+    face_color: RwSignal<String>,
+    face_alpha: RwSignal<f64>,
 }
 
 impl Model {
@@ -36,6 +38,8 @@ impl Model {
             show_edges: RwSignal::new(false),
             edge_width: RwSignal::new(1.0),
             edge_color: RwSignal::new("#000000".to_string()),
+            face_color: RwSignal::new("#cccccc".to_string()),
+            face_alpha: RwSignal::new(1.0),
         }
     }
 }
@@ -137,6 +141,25 @@ pub fn Model(model: Model) -> impl IntoView {
         });
     }
 
+    {
+        let viewer = viewer.clone();
+        Effect::new(move |_| {
+            let color = hex_to_rgba(&model.face_color.get());
+            viewer
+                .borrow_mut()
+                .set_face_color(model.id, [color[0], color[1], color[2]]);
+        });
+    }
+
+    {
+        let viewer = viewer.clone();
+        Effect::new(move |_| {
+            viewer
+                .borrow_mut()
+                .set_face_alpha(model.id, model.face_alpha.get() as f32);
+        });
+    }
+
     let write_to_local = move |_| {
         let (points, triangles) = model.data.get();
         let txt = write_obj(&points, &triangles);
@@ -212,6 +235,29 @@ pub fn Model(model: Model) -> impl IntoView {
                   </button>
                   </div>
               </div>
+               { move || {
+                 if model.show.get() {
+                     view! {
+                         <div class="flex items-center space-x-2 mt-2 px-2 text-xs w-full">
+                            <span class="w-8">Face:</span>
+                            <input type="range" min="0.0" max="1.0" step="0.01"
+                                prop:value=move || model.face_alpha.get()
+                                on:input=move |ev| model.face_alpha.set(event_target_value(&ev).parse().unwrap_or(1.0))
+                                class="w-16"
+                                title="Face Transparency"
+                            />
+                            <input type="color"
+                                prop:value=move || model.face_color.get()
+                                on:input=move |ev| model.face_color.set(event_target_value(&ev))
+                                class="w-6 h-6 border-none bg-transparent"
+                                title="Face Color"
+                            />
+                         </div>
+                     }.into_any()
+                 } else {
+                     view! { <div/> }.into_any()
+                 }
+               }}
                { move || {
                  if model.show_edges.get() {
                      view! {

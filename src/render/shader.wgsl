@@ -58,22 +58,30 @@ fn vs_main(v: VertexInput) -> VertexOutput {
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    // ambient intesensity
-    let ia = material.ka.xyz;
+    var base_color = vec4f(0.0, 0.0, 0.0, material.kd.w);
 
-    let eye_to_light = normalize(light_pos.xyz - in.pos_in_eye);
-    let dot_prod = max(dot(eye_to_light, in.normal), 0.0);
-    // diffuse intensity
-    let id = material.kd.xyz * dot_prod;
-   
-    let reflect_in_eye = reflect(-eye_to_light, in.normal);
-    let surface_to_viewer_eye = normalize(-in.pos_in_eye);
-    let dot_prod_specular = max(dot(reflect_in_eye, surface_to_viewer_eye), 0.0);
-    let specular_factor = pow(dot_prod_specular, 35.0);
-    // secular intensity
-    let is = material.ks.xyz * specular_factor;
+    if (material.kd.w < 0.999) {
+        base_color = material.kd;
+    } else {
+        // ambient intesensity
+        let ia = material.ka.xyz;
+
+        let eye_to_light = normalize(light_pos.xyz - in.pos_in_eye);
+        let normal = normalize(in.normal);
+        let face_normal = faceForward(normal, in.pos_in_eye, normal);
+        let dot_prod = max(dot(eye_to_light, face_normal), 0.0);
+        // diffuse intensity
+        let id = material.kd.xyz * dot_prod;
     
-    let base_color = vec4f(ia + id + is, 1.0);
+        let reflect_in_eye = reflect(-eye_to_light, face_normal);
+        let surface_to_viewer_eye = normalize(-in.pos_in_eye);
+        let dot_prod_specular = max(dot(reflect_in_eye, surface_to_viewer_eye), 0.0);
+        let specular_factor = pow(dot_prod_specular, 35.0);
+        // secular intensity
+        let is = material.ks.xyz * specular_factor;
+        
+        base_color = vec4f(ia + id + is, material.kd.w);
+    }
 
     if (material.edge_width > 0.0) {
         let d = min(min(in.barycentric.x, in.barycentric.y), in.barycentric.z);

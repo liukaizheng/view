@@ -84,7 +84,8 @@ impl Material {
 
 pub(crate) struct MeshPipeline {
     material_bind_group: wgpu::BindGroup,
-    pipeline: RenderPipeline,
+    pipeline_cull_back: RenderPipeline,
+    pipeline_cull_front: RenderPipeline,
 
     material_buffer: Buffer,
     vertex_buffer: Buffer,
@@ -165,40 +166,48 @@ impl ViewData {
                     push_constant_ranges: &[],
                 });
 
-        let render_pipeline =
-            render
-                .device
-                .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                    label: Some("render_pipeline"),
-                    layout: Some(&render_pipeline_layout),
-                    cache: None,
-                    vertex: wgpu::VertexState {
-                        module: &shader,
-                        entry_point: Some("vs_main"),
-                        compilation_options: Default::default(),
-                        buffers: &[Vertex::desc()],
-                    },
-                    fragment: Some(wgpu::FragmentState {
-                        module: &shader,
-                        entry_point: Some("fs_main"),
-                        compilation_options: Default::default(),
-                        targets: &[Some(render.config.format.into())],
-                    }),
-                    primitive: wgpu::PrimitiveState {
-                        topology: wgpu::PrimitiveTopology::TriangleList,
-                        front_face: wgpu::FrontFace::Ccw,
-                        ..Default::default()
-                    },
-                    depth_stencil: Some(wgpu::DepthStencilState {
-                        format: TextureFormat::Depth32Float,
-                        depth_write_enabled: true,
-                        depth_compare: CompareFunction::Less,
-                        stencil: wgpu::StencilState::default(),
-                        bias: wgpu::DepthBiasState::default(),
-                    }),
-                    multisample: wgpu::MultisampleState::default(),
-                    multiview: None,
-                });
+        let pipeline_desc_base = wgpu::RenderPipelineDescriptor {
+            label: Some("render_pipeline"),
+            layout: Some(&render_pipeline_layout),
+            cache: None,
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_main"),
+                compilation_options: Default::default(),
+                buffers: &[Vertex::desc()],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_main"),
+                compilation_options: Default::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: render.config.format,
+                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: Some(wgpu::Face::Back),
+                ..Default::default()
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: TextureFormat::Depth32Float,
+                depth_write_enabled: true,
+                depth_compare: CompareFunction::Less,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
+            multisample: wgpu::MultisampleState::default(),
+            multiview: None,
+        };
+
+        let render_pipeline_cull_back = render.device.create_render_pipeline(&pipeline_desc_base);
+
+        let mut pipeline_desc_inv = pipeline_desc_base.clone();
+        pipeline_desc_inv.primitive.cull_mode = Some(wgpu::Face::Front);
+        let render_pipeline_cull_front = render.device.create_render_pipeline(&pipeline_desc_inv);
 
         let vertex_buffer = render
             .device
@@ -212,7 +221,8 @@ impl ViewData {
 
         self.pipeline = Some(MeshPipeline {
             material_bind_group,
-            pipeline: render_pipeline,
+            pipeline_cull_back: render_pipeline_cull_back,
+            pipeline_cull_front: render_pipeline_cull_front,
             material_buffer,
             vertex_buffer,
         });
@@ -249,10 +259,23 @@ impl ViewData {
 
     pub(crate) fn render<'b, 'a: 'b>(&'a self, render_pass: &'b mut RenderPass<'a>) {
         let pipeline_data = self.pipeline.as_ref().unwrap();
-        render_pass.set_pipeline(&pipeline_data.pipeline);
         render_pass.set_bind_group(1, &pipeline_data.material_bind_group, &[]);
         render_pass.set_vertex_buffer(0, pipeline_data.vertex_buffer.slice(..));
-        render_pass.draw(0..self.vertices.len() as u32, 0..1);
+        
+        // Check alpha for transparency
+        if self.material.kd[3] < 0.999 {
+            // Pass 1: Draw back faces (Cull Front)
+            render_pass.set_pipeline(&pipeline_data.pipeline_cull_front);
+            render_pass.draw(0..self.vertices.len() as u32, 0..1);
+
+            // Pass 2: Draw front faces (Cull Back)
+            render_pass.set_pipeline(&pipeline_data.pipeline_cull_back);
+            render_pass.draw(0..self.vertices.len() as u32, 0..1);
+        } else {
+             // Opaque: Draw front faces (Cull Back)
+             render_pass.set_pipeline(&pipeline_data.pipeline_cull_back);
+             render_pass.draw(0..self.vertices.len() as u32, 0..1);
+        }
     }
 }
 
