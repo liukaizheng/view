@@ -289,6 +289,32 @@ pub fn ModelList(
 ) -> impl IntoView {
     let viewer = expect_context::<ViewerWrapper>();
     let (fix, set_fix) = signal(false);
+    
+    // Virtualization state
+    let (scroll_top, set_scroll_top) = signal(0.0);
+    let container_height = 500.0; // Fixed height for the visible area (pixels)
+    const ITEM_HEIGHT: f64 = 60.0; // Estimated height of each list item (pixels)
+    const BUFFER_ITEMS: usize = 5;
+
+    // Computed visible range
+    let visible_models = move || {
+        let all_models = models.get().0;
+        let total_count = all_models.len();
+        
+        let start_idx = (scroll_top.get() / ITEM_HEIGHT).floor() as usize;
+        let start_idx = start_idx.saturating_sub(BUFFER_ITEMS);
+        
+        let visible_count = (container_height / ITEM_HEIGHT).ceil() as usize + 2 * BUFFER_ITEMS;
+        let end_idx = (start_idx + visible_count).min(total_count);
+        
+        let subset = all_models[start_idx..end_idx].to_vec();
+        
+        let padding_top = start_idx as f64 * ITEM_HEIGHT;
+        let padding_bottom = (total_count.saturating_sub(end_idx)) as f64 * ITEM_HEIGHT;
+        
+        (subset, padding_top, padding_bottom)
+    };
+
     let fix_model = {
         let viewer = viewer.clone();
         move |_| {
@@ -366,32 +392,51 @@ pub fn ModelList(
     };
 
     view! {
-        <div class = "flex flex-wrap max-w-sm mt-10 mr-10">
-            <input type = "file" node_ref = file_input id = "add" on:change = on_change accept = ".obj" multiple class ="opacity-0"/>
-                <label for = "add" class = "w-full">
-                    <svg viewBox="0 0 24 24" stroke-linecap ="round" class = "w-8 h-8 stroke-emerald-900 bg-emerald-100 stroke-1 hover:stroke-2 hover:bg-emerald-200 rounded-full"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        <div class = "flex flex-wrap max-w-sm mt-10 mr-10 h-full flex-col">
+            <div class="flex w-full mb-2">
+                <input type = "file" node_ref = file_input id = "add" on:change = on_change accept = ".obj" multiple class ="opacity-0 hidden"/>
+                <label for = "add" class = "">
+                    <svg viewBox="0 0 24 24" stroke-linecap ="round" class = "w-8 h-8 stroke-emerald-900 bg-emerald-100 stroke-1 hover:stroke-2 hover:bg-emerald-200 rounded-full cursor-pointer"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                 </label>
-                <div class = "mt-2 w-full">
-                    <ul role = "list" class = "ml-10 w-full divide-y divide-gray-100 shadow rounded bg-white">
-                        <For
-                            each = move || models.get().0.clone()
-                            key = |model| model.id
-                            let:model
-                        >
-                            <Model model=model.clone()/>
-                        </For>
-                    </ul>
-                </div>
-            <button
-                class = "w-20 h-fit p-1 mt-3 rounded-full border border-emerald-600 bg-emerald-100 hover:bg-emerald-200"
-                class:hidden = move || models.get().0.is_empty()
-                disabled = move || fix.get()
-                on:click = fix_model
+                 <button
+                    class = "w-20 h-fit p-1 ml-4 rounded-full border border-emerald-600 bg-emerald-100 hover:bg-emerald-200"
+                    class:hidden = move || models.get().0.is_empty()
+                    disabled = move || fix.get()
+                    on:click = fix_model
+                >
+                    {move || {
+                        if fix.get() { "Fixing" } else { "Fix " }
+                    }}
+                </button>
+            </div>
+
+            <div 
+                class = "w-full divide-y divide-gray-100 shadow rounded bg-white overflow-y-auto border border-gray-200"
+                style = format!("height: {}px;", container_height)
+                on:scroll = move |ev| {
+                     let target: web_sys::HtmlElement = event_target(&ev);
+                     set_scroll_top.set(target.scroll_top() as f64);
+                }
             >
-                {move || {
-                    if fix.get() { "Fixing" } else { "Fix " }
-                }}
-            </button>
+                <div class="w-full relative">
+                    {move || {
+                        let (subset, p_top, p_bottom) = visible_models();
+                        view! {
+                            <div style=format!("height: {}px;", p_top)></div>
+                            <ul role="list" class="w-full divide-y divide-gray-100">
+                                <For
+                                    each = move || subset.clone()
+                                    key = |model| model.id
+                                    let:model
+                                >
+                                    <Model model=model.clone()/>
+                                </For>
+                            </ul>
+                            <div style=format!("height: {}px;", p_bottom)></div>
+                        }
+                    }}
+                </div>
+            </div>
         </div>
     }
 }
