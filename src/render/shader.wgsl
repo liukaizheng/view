@@ -1,7 +1,7 @@
 struct VertexInput {
     @location(0) point: vec3<f32>,
     @location(1) normal: vec3<f32>,
-    @location(2) barycentric: vec3<f32>,
+    @builtin(vertex_index) vertex_index: u32,
 }
 
 struct VertexOutput {
@@ -52,7 +52,16 @@ fn vs_main(v: VertexInput) -> VertexOutput {
 
     var normal_in_eye = (normal_mat * vec4f(v.normal, 1.0)).xyz;
     out.normal = normalize(normal_in_eye);
-    out.barycentric = v.barycentric;
+    
+    let idx = v.vertex_index % 3u;
+    if (idx == 0u) {
+        out.barycentric = vec3<f32>(1.0, 0.0, 0.0);
+    } else if (idx == 1u) {
+        out.barycentric = vec3<f32>(0.0, 1.0, 0.0);
+    } else {
+        out.barycentric = vec3<f32>(0.0, 0.0, 1.0);
+    }
+    
     return out;
 }
 

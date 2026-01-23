@@ -63,17 +63,14 @@ impl Viewer {
                         Vertex {
                             point: verts[0].into(),
                             normal: normal.into(),
-                            barycentric: [1.0, 0.0, 0.0],
                         },
                         Vertex {
                             point: verts[1].into(),
                             normal: normal.into(),
-                            barycentric: [0.0, 1.0, 0.0],
                         },
                         Vertex {
                             point: verts[2].into(),
                             normal: normal.into(),
-                            barycentric: [0.0, 0.0, 1.0],
                         },
                     ]
                 })

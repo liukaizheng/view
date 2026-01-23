@@ -20,7 +20,6 @@ bitflags::bitflags! {
 pub(crate) struct Vertex {
     pub(crate) point: [f32; 3],
     pub(crate) normal: [f32; 3],
-    pub(crate) barycentric: [f32; 3],
 }
 
 impl Vertex {
@@ -37,11 +36,6 @@ impl Vertex {
                 wgpu::VertexAttribute {
                     offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
                     shader_location: 1,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-                wgpu::VertexAttribute {
-                    offset: (std::mem::size_of::<[f32; 3]>() * 2) as wgpu::BufferAddress,
-                    shader_location: 2,
                     format: wgpu::VertexFormat::Float32x3,
                 },
             ],
