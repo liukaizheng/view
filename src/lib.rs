@@ -292,7 +292,8 @@ pub fn ModelList(
     
     // Virtualization state
     let (scroll_top, set_scroll_top) = signal(0.0);
-    let container_height = 500.0; // Fixed height for the visible area (pixels)
+    // Use a large default container height to render enough items to fill a typical screen vertical
+    let container_height = 1000.0; 
     const ITEM_HEIGHT: f64 = 60.0; // Estimated height of each list item (pixels)
     const BUFFER_ITEMS: usize = 5;
 
@@ -392,8 +393,8 @@ pub fn ModelList(
     };
 
     view! {
-        <div class = "flex flex-wrap max-w-sm mt-10 mr-10 h-full flex-col">
-            <div class="flex w-full mb-2">
+        <div class = "flex h-full flex-col w-full overflow-hidden">
+            <div class="flex w-full mb-2 p-2 bg-gray-50 border-b border-gray-200 shrink-0">
                 <input type = "file" node_ref = file_input id = "add" on:change = on_change accept = ".obj" multiple class ="opacity-0 hidden"/>
                 <label for = "add" class = "">
                     <svg viewBox="0 0 24 24" stroke-linecap ="round" class = "w-8 h-8 stroke-emerald-900 bg-emerald-100 stroke-1 hover:stroke-2 hover:bg-emerald-200 rounded-full cursor-pointer"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
@@ -411,16 +412,15 @@ pub fn ModelList(
             </div>
 
             <div 
-                class = "w-full divide-y divide-gray-100 shadow rounded bg-white overflow-y-auto border border-gray-200"
-                style = format!("height: {}px;", container_height)
+                class = "flex-1 w-full divide-y divide-gray-100 shadow bg-white overflow-y-auto"
                 on:scroll = move |ev| {
                      let target: web_sys::HtmlElement = event_target(&ev);
                      set_scroll_top.set(target.scroll_top() as f64);
                 }
             >
-                <div class="w-full relative">
-                    {move || {
-                        let (subset, p_top, p_bottom) = visible_models();
+                <div class="w-full relative" style=format!("height: {}px;", visible_models().1 + visible_models().2 + subset_height(visible_models().0.len()))>
+                   {move || {
+                        let (subset, p_top, _) = visible_models();
                         view! {
                             <div style=format!("height: {}px;", p_top)></div>
                             <ul role="list" class="w-full divide-y divide-gray-100">
@@ -432,13 +432,18 @@ pub fn ModelList(
                                     <Model model=model.clone()/>
                                 </For>
                             </ul>
-                            <div style=format!("height: {}px;", p_bottom)></div>
                         }
                     }}
                 </div>
             </div>
         </div>
     }
+}
+
+// Helper to calculate height of the rendered subset (not strictly needed if we use padding bottom correctly, 
+// but let's stick to the padding top/bottom approach which is robust)
+fn subset_height(count: usize) -> f64 {
+    count as f64 * 60.0 // ITEM_HEIGHT matches constant inside ModelList
 }
 
 #[component]
@@ -452,12 +457,12 @@ pub fn App(
     provide_context(viewer.clone());
 
     view! {
-        <div class = "flex w-full h-full flex-1">
-            <div>
+        <div class = "flex w-full h-full overflow-hidden">
+            <div class="w-80 h-full bg-gray-50 border-r border-gray-200 shadow-md z-10 flex flex-col">
                 <ModelList models set_models/>
             </div>
-            <div class = "w-full h-full">
-                <canvas node_ref = canvas class = "w-full h-full"/>
+            <div class = "flex-1 h-full relative">
+                <canvas node_ref = canvas class = "w-full h-full block"/>
             </div>
         </div>
     }

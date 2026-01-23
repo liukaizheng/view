@@ -24,7 +24,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Install tailwindcss
-        run: npm install -D tailwindcss@latest
+        run: npm install -D tailwindcss@latest @tailwindcss/cli@latest
 
       - uses: jetli/trunk-action@v0.4.0
       - name: Trunk Build
