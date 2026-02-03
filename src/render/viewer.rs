@@ -1,9 +1,5 @@
 use anyhow::Result;
 use cgmath::{InnerSpace, Quaternion, Rad, Rotation3, Vector3};
-use rand::{
-    distributions::{Distribution, Uniform},
-    SeedableRng,
-};
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use winit::dpi::PhysicalPosition;
 
@@ -80,12 +76,10 @@ impl Viewer {
         let data_color = if let Some(color) = color {
             color
         } else {
-            let mut rng = rand::rngs::SmallRng::from_entropy();
-            let between = Uniform::from(0.0..1.0);
             Vector3::new(
-                between.sample(&mut rng),
-                between.sample(&mut rng),
-                between.sample(&mut rng),
+                js_sys::Math::random() as f32,
+                js_sys::Math::random() as f32,
+                js_sys::Math::random() as f32,
             )
         };
         let data = ViewData::new(vertices, Material::new(data_color));
@@ -114,6 +108,7 @@ impl Viewer {
                             load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                             store: wgpu::StoreOp::Store,
                         },
+                        depth_slice: None,
                     })],
                     depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                         view: &render.depth_texture_view,
@@ -125,6 +120,7 @@ impl Viewer {
                     }),
                     timestamp_writes: None,
                     occlusion_query_set: None,
+                    multiview_mask: None,
                 });
                 render_pass.set_viewport(0.0, 0.0, render.w() as f32, render.h() as f32, 0.0, 1.0);
                 self.view_core.render(

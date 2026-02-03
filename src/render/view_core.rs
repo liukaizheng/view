@@ -240,7 +240,7 @@ impl ViewCore {
                                 .camera_bind_group_layout,
                             &material_bind_group_layout,
                         ],
-                        push_constant_ranges: &[],
+                        immediate_size: 0,
                     });
 
             let pipeline_desc_base = wgpu::RenderPipelineDescriptor {
@@ -277,7 +277,7 @@ impl ViewCore {
                     bias: wgpu::DepthBiasState::default(),
                 }),
                 multisample: wgpu::MultisampleState::default(),
-                multiview: None,
+                multiview_mask: None,
             };
 
             let render_pipeline_cull_back =

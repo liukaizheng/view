@@ -22,8 +22,7 @@ impl Renderer {
                 force_fallback_adapter: false,
                 compatible_surface: Some(&surface),
             })
-            .await
-            .ok_or(anyhow::anyhow!("Failed to find an appropriate adapter"))?;
+            .await?;
         let (device, queue) = adapter
             .request_device(
                 &DeviceDescriptor {
@@ -33,8 +32,9 @@ impl Renderer {
                     required_limits: wgpu::Limits::downlevel_webgl2_defaults()
                         .using_resolution(adapter.limits()),
                     memory_hints: wgpu::MemoryHints::default(),
+                    trace: wgpu::Trace::default(),
+                    experimental_features: wgpu::ExperimentalFeatures::default(),
                 },
-                None,
             )
             .await
             .or_else(|_| Err(anyhow::anyhow!("Failed to create device")))?;
